@@ -12,6 +12,8 @@ import java.util.List;
 
 public class ReactCBLiteManager implements ReactPackage {
 
+    private ReactCBLite reactCBLite;
+
     @Override
     public List<Class<? extends JavaScriptModule>> createJSModules() {
         return Collections.emptyList();
@@ -23,13 +25,15 @@ public class ReactCBLiteManager implements ReactPackage {
     }
 
     @Override
-    public List<NativeModule> createNativeModules(
-            ReactApplicationContext reactContext) {
+    public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
         List<NativeModule> modules = new ArrayList<>();
-        modules.add(new ReactCBLite(reactContext));
+        reactCBLite = new ReactCBLite(reactContext);
+        modules.add(reactCBLite);
 
         return modules;
     }
 
-
+    public ReactCBLite getReactCBLite() {
+        return reactCBLite;
+    }
 }

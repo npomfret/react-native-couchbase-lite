@@ -218,9 +218,9 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
         } catch (CouchbaseLiteException e) {
             Log.e(TAG, "Failed to sync", e);
         } catch (MalformedURLException e) {
-            throw new IllegalStateException("Bad url " + syncURL, e);
+            Log.e(TAG, "Bad url " + syncURL, e);
         } catch (InterruptedException e) {
-            throw new IllegalStateException("Should not happen", e);
+            Log.e(TAG, "Should not happen", e);
         }
     }
 
