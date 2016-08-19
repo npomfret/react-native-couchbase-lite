@@ -33,14 +33,14 @@ RCT_EXPORT_METHOD(initWithAuth:(NSString*)username password:(NSString*)password 
         NSLog(@"Launching Couchbase Lite...");
         CBLManager* dbmgr = [CBLManager sharedInstance];
         CBLRegisterJSViewCompiler();
-
+        
         //register the server with CBL_URLProtocol
         [dbmgr internalURL];
-
+        
         int suggestedPort = 5984;
-
+        
         listener = [self createListener:suggestedPort withUsername:username withPassword:password withCBLManager: dbmgr];
-
+        
         NSLog(@"Couchbase Lite listening on port <%@>", listener.URL.port);
         NSString *extenalUrl = [NSString stringWithFormat:@"http://%@:%@@localhost:%@/", username, password, listener.URL.port];
         callback(@[extenalUrl, [NSNull null]]);
@@ -51,29 +51,47 @@ RCT_EXPORT_METHOD(initWithAuth:(NSString*)username password:(NSString*)password 
 }
 
 - (CBLListener*) createListener: (int) port
-                  withUsername: (NSString *) username
-                  withPassword: (NSString *) password
-                withCBLManager: (CBLManager*) cblManager
+                   withUsername: (NSString *) username
+                   withPassword: (NSString *) password
+                 withCBLManager: (CBLManager*) cblManager
 {
-
+    
     CBLListener* listener = [[CBLListener alloc] initWithManager:cblManager port:port];
     [listener setPasswords:@{username: password}];
-
+    
     NSLog(@"Trying port %d", port);
-
+    
     NSError *err = nil;
     BOOL success = [listener start: &err];
-
+    
     if (success) {
         NSLog(@"Couchbase Lite running on %@", listener.URL);
         return listener;
     } else {
         NSLog(@"Could not start listener on port %d: %@", port, err);
-
+        
         port++;
-
+        
         return [self createListener:port withUsername:username withPassword:password withCBLManager: cblManager];
     }
+}
+
+RCT_EXPORT_METHOD(oneShotSync:(NSString*)syncURL dbName:(NSString*)dbName userId:(NSString*)userId password:(NSString*)password)
+{
+    CBLManager *manager = [CBLManager sharedInstance];
+    CBLDatabase* database = [manager databaseNamed:dbName error:nil];
+    
+    NSURL* url = [NSURL URLWithString: syncURL];
+    
+    CBLReplication* pull = [database createPullReplication:url];
+    
+    CBLReplication* push = [database createPushReplication:url];
+    
+    id<CBLAuthenticator> auth = [CBLAuthenticator basicAuthenticatorWithName: userId password: password];
+    push.authenticator = pull.authenticator = auth;
+    
+    [pull start];
+    [push start];
 }
 
 // stop and start are needed because the OS appears to kill the listener when the app becomes inactive (when the screen is locked, or its put in the background)
