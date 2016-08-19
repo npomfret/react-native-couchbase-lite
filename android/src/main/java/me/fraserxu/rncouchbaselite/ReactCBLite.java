@@ -92,10 +92,10 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
     @ReactMethod
     public void initWithAuth(String username, String password, Callback callback) {
         Credentials credentials;
-        if(username == null && password == null) {
+        if (username == null && password == null) {
             credentials = null;
             Log.w(TAG, "No credential specified, your listener is unsecured and you are putting your data at risk");
-        } else if(username == null || password == null) {
+        } else if (username == null || password == null) {
             callback.invoke(null, "username and password must not be null");
             return;
         } else {
@@ -119,7 +119,7 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
             this.startListener();
 
             String url;
-            if(credentials != null) {
+            if (credentials != null) {
                 url = String.format(
                         "http://%s:%s@localhost:%d/",
                         credentials.getLogin(),
@@ -165,6 +165,8 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void oneShotSync(String syncURL, String databaseName, String username, String password) {
+        Log.i(TAG, "Starting one shot sync for dabase '" + databaseName + " to sync-gateway at " + syncURL);
+
         OneShotSyncListener syncListener = this.syncListener;
         this.syncListener = null;
 
@@ -172,45 +174,44 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
             URL url = new URL(syncURL);
 
             Database database = manager.getDatabase(databaseName);
-            Log.i(TAG, "Total number of replicators: " + database.getAllReplications().size());
-            Log.i(TAG, "Total number of active replicators: " + database.getActiveReplications().size());
+
+            Log.d(TAG, "Total number of replicators: " + database.getAllReplications().size());
+            Log.d(TAG, "Total number of active replicators: " + database.getActiveReplications().size());
 
             Replication push = database.createPushReplication(url);
             Replication pull = database.createPullReplication(url);
-
-            final CountDownLatch countDownLatch = new CountDownLatch(2);
 
             Authenticator auth = AuthenticatorFactory.createBasicAuthenticator(username, password);
             push.setAuthenticator(auth);
             pull.setAuthenticator(auth);
 
-            if(syncListener != null) {
-                push.addChangeListener(new Replication.ChangeListener() {
-                    @Override
-                    public void changed(Replication.ChangeEvent event) {
-                        Log.i(TAG, "one-shot push replication status is: " + event.getSource().getStatus());
-                        if (event.getSource().getStatus() == Replication.ReplicationStatus.REPLICATION_STOPPED) {
-                            countDownLatch.countDown();
-                        }
-                    }
-                });
+            final CountDownLatch syncCompleteLatch = new CountDownLatch(2);
 
-                pull.addChangeListener(new Replication.ChangeListener() {
-                    @Override
-                    public void changed(Replication.ChangeEvent event) {
-                        Log.i(TAG, "one-shot pull replication status is: " + event.getSource().getStatus());
-                        if (event.getSource().getStatus() == Replication.ReplicationStatus.REPLICATION_STOPPED) {
-                            countDownLatch.countDown();
-                        }
+            push.addChangeListener(new Replication.ChangeListener() {
+                @Override
+                public void changed(Replication.ChangeEvent event) {
+                    Log.i(TAG, "one-shot push replication status is: " + event.getSource().getStatus());
+                    if (event.getSource().getStatus() == Replication.ReplicationStatus.REPLICATION_STOPPED) {
+                        syncCompleteLatch.countDown();
                     }
-                });
-            }
+                }
+            });
+
+            pull.addChangeListener(new Replication.ChangeListener() {
+                @Override
+                public void changed(Replication.ChangeEvent event) {
+                    Log.i(TAG, "one-shot pull replication status is: " + event.getSource().getStatus());
+                    if (event.getSource().getStatus() == Replication.ReplicationStatus.REPLICATION_STOPPED) {
+                        syncCompleteLatch.countDown();
+                    }
+                }
+            });
 
             push.start();
             pull.start();
 
-            if(syncListener != null) {
-                countDownLatch.await(30, TimeUnit.SECONDS);
+            if (syncListener != null) {
+                syncCompleteLatch.await();
                 syncListener.syncComplete();
             }
 
@@ -231,7 +232,7 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void startListener() {
-        if(listener == null) {
+        if (listener == null) {
             listener = new LiteListener(manager, SUGGESTED_PORT, allowedCredentials);
             Log.i(TAG, "Starting CBL listener on port " + listener.getListenPort());
         } else {
