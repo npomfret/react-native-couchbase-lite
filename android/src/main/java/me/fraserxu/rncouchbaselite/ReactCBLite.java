@@ -3,14 +3,18 @@ package me.fraserxu.rncouchbaselite;
 import android.net.Uri;
 import android.os.AsyncTask;
 
+import com.couchbase.lite.CouchbaseLiteException;
 import com.couchbase.lite.Database;
 import com.couchbase.lite.Manager;
 import com.couchbase.lite.View;
 import com.couchbase.lite.android.AndroidContext;
+import com.couchbase.lite.auth.Authenticator;
+import com.couchbase.lite.auth.AuthenticatorFactory;
 import com.couchbase.lite.javascript.JavaScriptReplicationFilterCompiler;
 import com.couchbase.lite.javascript.JavaScriptViewCompiler;
 import com.couchbase.lite.listener.Credentials;
 import com.couchbase.lite.listener.LiteListener;
+import com.couchbase.lite.replicator.Replication;
 import com.couchbase.lite.util.Log;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Callback;
@@ -29,9 +33,12 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static me.fraserxu.rncouchbaselite.ReactNativeJson.convertJsonToMap;
 
@@ -48,6 +55,7 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
     private Manager manager;
     private Credentials allowedCredentials;
     private LiteListener listener;
+    private OneShotSyncListener syncListener;
 
     public ReactCBLite(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -145,6 +153,74 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
         Manager.enableLogging(Log.TAG_MULTI_STREAM_WRITER, level);
         Manager.enableLogging(Log.TAG_REMOTE_REQUEST, level);
         Manager.enableLogging(Log.TAG_ROUTER, level);
+    }
+
+    public void onOneShotSyncComplete(OneShotSyncListener syncListener) {
+        this.syncListener = syncListener;
+    }
+
+    public interface OneShotSyncListener {
+        void syncComplete();
+    }
+
+    @ReactMethod
+    public void oneShotSync(String syncURL, String databaseName, String username, String password) {
+        OneShotSyncListener syncListener = this.syncListener;
+        this.syncListener = null;
+
+        try {
+            URL url = new URL(syncURL);
+
+            Database database = manager.getDatabase(databaseName);
+            Log.i(TAG, "Total number of replicators: " + database.getAllReplications().size());
+            Log.i(TAG, "Total number of active replicators: " + database.getActiveReplications().size());
+
+            Replication push = database.createPushReplication(url);
+            Replication pull = database.createPullReplication(url);
+
+            final CountDownLatch countDownLatch = new CountDownLatch(2);
+
+            Authenticator auth = AuthenticatorFactory.createBasicAuthenticator(username, password);
+            push.setAuthenticator(auth);
+            pull.setAuthenticator(auth);
+
+            if(syncListener != null) {
+                push.addChangeListener(new Replication.ChangeListener() {
+                    @Override
+                    public void changed(Replication.ChangeEvent event) {
+                        Log.i(TAG, "one-shot push replication status is: " + event.getSource().getStatus());
+                        if (event.getSource().getStatus() == Replication.ReplicationStatus.REPLICATION_STOPPED) {
+                            countDownLatch.countDown();
+                        }
+                    }
+                });
+
+                pull.addChangeListener(new Replication.ChangeListener() {
+                    @Override
+                    public void changed(Replication.ChangeEvent event) {
+                        Log.i(TAG, "one-shot pull replication status is: " + event.getSource().getStatus());
+                        if (event.getSource().getStatus() == Replication.ReplicationStatus.REPLICATION_STOPPED) {
+                            countDownLatch.countDown();
+                        }
+                    }
+                });
+            }
+
+            push.start();
+            pull.start();
+
+            if(syncListener != null) {
+                countDownLatch.await(30, TimeUnit.SECONDS);
+                syncListener.syncComplete();
+            }
+
+        } catch (CouchbaseLiteException e) {
+            Log.e(TAG, "Failed to sync", e);
+        } catch (MalformedURLException e) {
+            throw new IllegalStateException("Bad url " + syncURL, e);
+        } catch (InterruptedException e) {
+            throw new IllegalStateException("Should not happen", e);
+        }
     }
 
     @ReactMethod
