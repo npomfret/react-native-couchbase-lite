@@ -76,14 +76,26 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
     @ReactMethod
     public static void logLevel(String name) {
         switch (name) {
-            case "DEBUG":
+            case "VERBOSE": {
+                setLogLevel(Log.VERBOSE);
+                break;
+            }
+            case "DEBUG": {
                 setLogLevel(Log.DEBUG);
-            case "INFO":
+                break;
+            }
+            case "INFO": {
                 setLogLevel(Log.INFO);
-            case "WARN":
+                break;
+            }
+            case "WARN": {
                 setLogLevel(Log.WARN);
-            case "ERROR":
+                break;
+            }
+            case "ERROR": {
                 setLogLevel(Log.ERROR);
+                break;
+            }
             case "ASSERT":
                 setLogLevel(Log.ASSERT);
         }
@@ -142,6 +154,8 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
     }
 
     private static void setLogLevel(int level) {
+        Log.i(TAG, "Setting log level to '" + level + "'");
+
         Manager.enableLogging(Log.TAG, level);
         Manager.enableLogging(Log.TAG_SYNC, level);
         Manager.enableLogging(Log.TAG_QUERY, level);
