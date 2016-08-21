@@ -78,19 +78,38 @@ RCT_EXPORT_METHOD(initWithAuth:(NSString*)username password:(NSString*)password 
 
 RCT_EXPORT_METHOD(oneShotSync:(NSString*)syncURL dbName:(NSString*)dbName userId:(NSString*)userId password:(NSString*)password)
 {
+    NSURL* url = [NSURL URLWithString: syncURL];
+
+    [self oneShotPullSync:url dbName:dbName userId:userId password:password];
+    [self oneShotPushSync:url dbName:dbName userId:userId password:password];
+}
+
+- (void) oneShotPullSync:(NSURL*)syncURL
+                  dbName:(NSString*)dbName
+                  userId:(NSString*)userId
+                password:(NSString*)password
+{
     CBLManager *manager = [CBLManager sharedInstance];
     CBLDatabase* database = [manager databaseNamed:dbName error:nil];
-    
-    NSURL* url = [NSURL URLWithString: syncURL];
-    
-    CBLReplication* pull = [database createPullReplication:url];
-    
-    CBLReplication* push = [database createPushReplication:url];
-    
-    id<CBLAuthenticator> auth = [CBLAuthenticator basicAuthenticatorWithName: userId password: password];
-    push.authenticator = pull.authenticator = auth;
-    
+
+    CBLReplication* pull = [database createPullReplication:syncURL];
+
+    pull.authenticator = [CBLAuthenticator basicAuthenticatorWithName: userId password: password];
+
     [pull start];
+}
+
+- (void) oneShotPushSync:(NSURL*)syncURL
+                  dbName:(NSString*)dbName userId:(NSString*)userId
+                password:(NSString*)password
+{
+    CBLManager *manager = [CBLManager sharedInstance];
+    CBLDatabase* database = [manager databaseNamed:dbName error:nil];
+
+    CBLReplication* push = [database createPushReplication:syncURL];
+
+    push.authenticator = [CBLAuthenticator basicAuthenticatorWithName: userId password: password];
+
     [push start];
 }
 
