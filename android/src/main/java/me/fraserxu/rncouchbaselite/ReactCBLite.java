@@ -22,6 +22,7 @@ import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.Promise;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -30,15 +31,14 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 import static me.fraserxu.rncouchbaselite.ReactNativeJson.convertJsonToMap;
 
@@ -179,63 +179,116 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void oneShotSync(String syncURL, String databaseName, String username, String password) {
-        Log.i(TAG, "Starting one shot sync for dabase '" + databaseName + " to sync-gateway at " + syncURL);
-
         OneShotSyncListener syncListener = this.syncListener;
         this.syncListener = null;
 
+        final CountDownLatch countDownLatch = new CountDownLatch(2);
+
         try {
-            URL url = new URL(syncURL);
-
-            Database database = manager.getDatabase(databaseName);
-
-            Log.d(TAG, "Total number of replicators: " + database.getAllReplications().size());
-            Log.d(TAG, "Total number of active replicators: " + database.getActiveReplications().size());
-
-            Replication push = database.createPushReplication(url);
-            Replication pull = database.createPullReplication(url);
-
-            Authenticator auth = AuthenticatorFactory.createBasicAuthenticator(username, password);
-            push.setAuthenticator(auth);
-            pull.setAuthenticator(auth);
-
-            final CountDownLatch syncCompleteLatch = new CountDownLatch(2);
-
-            push.addChangeListener(new Replication.ChangeListener() {
+            pullSync(syncURL, databaseName, username, password, new OneShotSyncListener() {
                 @Override
-                public void changed(Replication.ChangeEvent event) {
-                    Log.i(TAG, "one-shot push replication status is: " + event.getSource().getStatus());
-                    if (event.getSource().getStatus() == Replication.ReplicationStatus.REPLICATION_STOPPED) {
-                        syncCompleteLatch.countDown();
-                    }
+                public void syncComplete() {
+                    countDownLatch.countDown();
                 }
             });
 
-            pull.addChangeListener(new Replication.ChangeListener() {
+            pushSync(syncURL, databaseName, username, password, new OneShotSyncListener() {
                 @Override
-                public void changed(Replication.ChangeEvent event) {
-                    Log.i(TAG, "one-shot pull replication status is: " + event.getSource().getStatus());
-                    if (event.getSource().getStatus() == Replication.ReplicationStatus.REPLICATION_STOPPED) {
-                        syncCompleteLatch.countDown();
-                    }
+                public void syncComplete() {
+                    countDownLatch.countDown();
                 }
             });
-
-            push.start();
-            pull.start();
 
             if (syncListener != null) {
-                syncCompleteLatch.await();
+                countDownLatch.await();
                 syncListener.syncComplete();
             }
-
-        } catch (CouchbaseLiteException e) {
-            Log.e(TAG, "Failed to sync", e);
         } catch (MalformedURLException e) {
-            Log.e(TAG, "Bad url " + syncURL, e);
+            Log.e(TAG, "sync failed", e);
+        } catch (CouchbaseLiteException e) {
+            Log.e(TAG, "sync failed", e);
         } catch (InterruptedException e) {
-            Log.e(TAG, "Should not happen", e);
+            Log.e(TAG, "sync failed", e);
         }
+    }
+
+    @ReactMethod
+    public void oneShotPullSync(String syncURL, String databaseName, String username, String password, final Promise promise) {
+        try {
+            pullSync(syncURL, databaseName, username, password, new OneShotSyncListener() {
+                @Override
+                public void syncComplete() {
+                    promise.resolve(null);
+                }
+            });
+        } catch (MalformedURLException e) {
+            Log.e(TAG, "one shot pull sync failed", e);
+            promise.reject(e);
+        } catch (CouchbaseLiteException e) {
+            Log.e(TAG, "one shot pull sync failed", e);
+            promise.reject(e);
+        }
+    }
+
+    @ReactMethod
+    public void oneShotPushSync(String syncURL, String databaseName, String username, String password, final Promise promise) {
+        try {
+            pushSync(syncURL, databaseName, username, password, new OneShotSyncListener() {
+                @Override
+                public void syncComplete() {
+                    promise.resolve(null);
+                }
+            });
+        } catch (MalformedURLException e) {
+            Log.e(TAG, "one shot pull sync failed", e);
+            promise.reject(e);
+        } catch (CouchbaseLiteException e) {
+            Log.e(TAG, "one shot pull sync failed", e);
+            promise.reject(e);
+        }
+    }
+
+    private void pullSync(String syncURL, String databaseName, String username, String password, final OneShotSyncListener oneShotSyncListener) throws MalformedURLException, CouchbaseLiteException {
+        Log.i(TAG, "Starting one shot pull sync for database '" + databaseName + " to sync-gateway at " + syncURL);
+
+        URL url = new URL(syncURL);
+
+        Database database = manager.getDatabase(databaseName);
+
+        Log.d(TAG, "Total number of replicators: " + database.getAllReplications().size());
+        Log.d(TAG, "Total number of active replicators: " + database.getActiveReplications().size());
+
+        sync(username, password, oneShotSyncListener, database.createPullReplication(url));
+    }
+
+    private void pushSync(String syncURL, String databaseName, String username, String password, final OneShotSyncListener oneShotSyncListener) throws MalformedURLException, CouchbaseLiteException {
+        Log.i(TAG, "Starting one shot push sync for database '" + databaseName + " to sync-gateway at " + syncURL);
+
+        URL url = new URL(syncURL);
+
+        Database database = manager.getDatabase(databaseName);
+
+        Log.d(TAG, "Total number of replicators: " + database.getAllReplications().size());
+        Log.d(TAG, "Total number of active replicators: " + database.getActiveReplications().size());
+
+        sync(username, password, oneShotSyncListener, database.createPushReplication(url));
+    }
+
+    private static void sync(String username, String password, final OneShotSyncListener oneShotSyncListener, Replication sync) {
+        Authenticator auth = AuthenticatorFactory.createBasicAuthenticator(username, password);
+        sync.setAuthenticator(auth);
+
+        sync.addChangeListener(new Replication.ChangeListener() {
+            @Override
+            public void changed(Replication.ChangeEvent event) {
+                if (event.getSource().getStatus() == Replication.ReplicationStatus.REPLICATION_STOPPED) {
+                    Log.i(TAG, "one-shot replication status is: " + event.getSource().getStatus());
+                    oneShotSyncListener.syncComplete();
+                }
+            }
+        });
+
+        sync.start();
     }
 
     @ReactMethod
