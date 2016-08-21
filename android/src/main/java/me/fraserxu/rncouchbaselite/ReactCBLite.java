@@ -185,14 +185,16 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
         final CountDownLatch countDownLatch = new CountDownLatch(2);
 
         try {
-            pullSync(syncURL, databaseName, username, password, new OneShotSyncListener() {
+            URL url = new URL(syncURL);
+
+            pullSync(url, databaseName, username, password, new OneShotSyncListener() {
                 @Override
                 public void syncComplete() {
                     countDownLatch.countDown();
                 }
             });
 
-            pushSync(syncURL, databaseName, username, password, new OneShotSyncListener() {
+            pushSync(url, databaseName, username, password, new OneShotSyncListener() {
                 @Override
                 public void syncComplete() {
                     countDownLatch.countDown();
@@ -215,7 +217,7 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
     @ReactMethod
     public void oneShotPullSync(String syncURL, String databaseName, String username, String password, final Promise promise) {
         try {
-            pullSync(syncURL, databaseName, username, password, new OneShotSyncListener() {
+            pullSync(new URL(syncURL), databaseName, username, password, new OneShotSyncListener() {
                 @Override
                 public void syncComplete() {
                     promise.resolve(null);
@@ -233,7 +235,7 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
     @ReactMethod
     public void oneShotPushSync(String syncURL, String databaseName, String username, String password, final Promise promise) {
         try {
-            pushSync(syncURL, databaseName, username, password, new OneShotSyncListener() {
+            pushSync(new URL(syncURL), databaseName, username, password, new OneShotSyncListener() {
                 @Override
                 public void syncComplete() {
                     promise.resolve(null);
@@ -248,30 +250,20 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
         }
     }
 
-    private void pullSync(String syncURL, String databaseName, String username, String password, final OneShotSyncListener oneShotSyncListener) throws MalformedURLException, CouchbaseLiteException {
+    private void pullSync(URL syncURL, String databaseName, String username, String password, final OneShotSyncListener oneShotSyncListener) throws MalformedURLException, CouchbaseLiteException {
         Log.i(TAG, "Starting one shot pull sync for database '" + databaseName + " to sync-gateway at " + syncURL);
 
-        URL url = new URL(syncURL);
-
         Database database = manager.getDatabase(databaseName);
-
-        Log.d(TAG, "Total number of replicators: " + database.getAllReplications().size());
-        Log.d(TAG, "Total number of active replicators: " + database.getActiveReplications().size());
-
-        sync(username, password, oneShotSyncListener, database.createPullReplication(url));
+        Replication pullReplication = database.createPullReplication(syncURL);
+        sync(username, password, oneShotSyncListener, pullReplication);
     }
 
-    private void pushSync(String syncURL, String databaseName, String username, String password, final OneShotSyncListener oneShotSyncListener) throws MalformedURLException, CouchbaseLiteException {
+    private void pushSync(URL syncURL, String databaseName, String username, String password, final OneShotSyncListener oneShotSyncListener) throws MalformedURLException, CouchbaseLiteException {
         Log.i(TAG, "Starting one shot push sync for database '" + databaseName + " to sync-gateway at " + syncURL);
 
-        URL url = new URL(syncURL);
-
         Database database = manager.getDatabase(databaseName);
-
-        Log.d(TAG, "Total number of replicators: " + database.getAllReplications().size());
-        Log.d(TAG, "Total number of active replicators: " + database.getActiveReplications().size());
-
-        sync(username, password, oneShotSyncListener, database.createPushReplication(url));
+        Replication pushReplication = database.createPushReplication(syncURL);
+        sync(username, password, oneShotSyncListener, pushReplication);
     }
 
     private static void sync(String username, String password, final OneShotSyncListener oneShotSyncListener, Replication sync) {
