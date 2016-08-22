@@ -7,6 +7,7 @@
 //
 
 #import "ReactCBLite.h"
+#import "SyncObserver.h"
 
 #import "RCTLog.h"
 
@@ -15,6 +16,24 @@
 #import "CBLRegisterJSViewCompiler.h"
 #import <AssetsLibrary/AssetsLibrary.h>
 #import "ReactCBLiteRequestHandler.h"
+
+typedef void (^ErrorCallback)(NSError*);
+typedef void (^SuccessCallback)();
+typedef void (^ReplicationChanged) (NSNotification*);
+
+@interface SyncParams : NSObject
+
+@property (copy) ErrorCallback errorCallback;
+@property (copy) SuccessCallback successCallback;
+@property (copy) ReplicationChanged replicationChanged;
+
+- (void)replicationChanged:(NSNotification*)notification;
+
+@end
+
+@implementation SyncParams
+
+@end
 
 @implementation ReactCBLite
 
@@ -79,38 +98,82 @@ RCT_EXPORT_METHOD(initWithAuth:(NSString*)username password:(NSString*)password 
 RCT_EXPORT_METHOD(oneShotSync:(NSString*)syncURL dbName:(NSString*)dbName userId:(NSString*)userId password:(NSString*)password)
 {
     NSURL* url = [NSURL URLWithString: syncURL];
-
-    [self oneShotPullSync:url dbName:dbName userId:userId password:password];
-    [self oneShotPushSync:url dbName:dbName userId:userId password:password];
+    
+    [self pullSync:url dbName:dbName userId:userId password:password syncObserver:nil];
+    [self pushSync:url dbName:dbName userId:userId password:password syncObserver:nil];
 }
 
-- (void) oneShotPullSync:(NSURL*)syncURL
-                  dbName:(NSString*)dbName
-                  userId:(NSString*)userId
-                password:(NSString*)password
+RCT_EXPORT_METHOD(oneShotPullSyncSync:(NSString*)syncURL dbName:(NSString*)dbName userId:(NSString*)userId password:(NSString*)password resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
 {
+    NSURL* url = [NSURL URLWithString: syncURL];
+    
+    SyncObserver* syncObserver = [SyncObserver alloc];
+    syncObserver.resolve = resolve;
+    syncObserver.reject = reject;
+    
+    [self pullSync:url dbName:dbName userId:userId password:password syncObserver:syncObserver];
+}
+
+RCT_EXPORT_METHOD(oneShotPushSyncSync:(NSString*)syncURL dbName:(NSString*)dbName userId:(NSString*)userId password:(NSString*)password resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
+{
+    NSURL* url = [NSURL URLWithString: syncURL];
+    
+    SyncObserver* syncObserver = [SyncObserver alloc];
+    syncObserver.resolve = resolve;
+    syncObserver.reject = reject;
+
+    [self pushSync:url dbName:dbName userId:userId password:password syncObserver:syncObserver];
+}
+
+- (void) pullSync:(NSURL*)syncURL
+           dbName:(NSString*)dbName
+           userId:(NSString*)userId
+         password:(NSString*)password
+           syncObserver:(SyncObserver*) syncObserver
+{
+    NSLog(@"Starting one-shot pull sync for %@ to %@", dbName, syncURL.absoluteString);
+    
+    CBLManager *manager = [CBLManager sharedInstance];
+    CBLDatabase* database = [manager databaseNamed:dbName error:nil];
+    
+    CBLReplication* repl = [database createPullReplication:syncURL];
+    syncObserver.repl = repl;
+    
+    repl.authenticator = [CBLAuthenticator basicAuthenticatorWithName: userId password: password];
+
+    if(syncObserver) {
+        [[NSNotificationCenter defaultCenter] addObserver: syncObserver
+                                                 selector: @selector(replicationChanged:)
+                                                     name: kCBLReplicationChangeNotification
+                                                   object: repl];
+    }
+    
+    [repl start];
+}
+
+- (void) pushSync:(NSURL*)syncURL
+           dbName:(NSString*)dbName userId:(NSString*)userId
+         password:(NSString*)password
+           syncObserver:(SyncObserver*) syncObserver
+{
+    NSLog(@"Starting one-shot push sync for %@ to %@", dbName, syncURL.absoluteString);
+
     CBLManager *manager = [CBLManager sharedInstance];
     CBLDatabase* database = [manager databaseNamed:dbName error:nil];
 
-    CBLReplication* pull = [database createPullReplication:syncURL];
+    CBLReplication* repl = [database createPushReplication:syncURL];
+    syncObserver.repl = repl;
 
-    pull.authenticator = [CBLAuthenticator basicAuthenticatorWithName: userId password: password];
+    repl.authenticator = [CBLAuthenticator basicAuthenticatorWithName: userId password: password];
 
-    [pull start];
-}
+    if(syncObserver) {
+        [[NSNotificationCenter defaultCenter] addObserver: syncObserver
+                                                 selector: @selector(replicationChanged:)
+                                                     name: kCBLReplicationChangeNotification
+                                                   object: repl];
+    }
 
-- (void) oneShotPushSync:(NSURL*)syncURL
-                  dbName:(NSString*)dbName userId:(NSString*)userId
-                password:(NSString*)password
-{
-    CBLManager *manager = [CBLManager sharedInstance];
-    CBLDatabase* database = [manager databaseNamed:dbName error:nil];
-
-    CBLReplication* push = [database createPushReplication:syncURL];
-
-    push.authenticator = [CBLAuthenticator basicAuthenticatorWithName: userId password: password];
-
-    [push start];
+    [repl start];
 }
 
 // stop and start are needed because the OS appears to kill the listener when the app becomes inactive (when the screen is locked, or its put in the background)
