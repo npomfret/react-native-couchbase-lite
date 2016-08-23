@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1BAD8A6D1D6C58BC00AD08CF /* SyncObserver.m in Sources */ = {isa = PBXBuildFile; fileRef = 1BAD8A6C1D6C58BC00AD08CF /* SyncObserver.m */; };
 		9D3FF82D1D422DE600C58878 /* ReactCBLiteRequestHandler.m in Sources */ = {isa = PBXBuildFile; fileRef = 9D3FF82C1D422DE600C58878 /* ReactCBLiteRequestHandler.m */; };
 		BE8EFD451C0E6D9000627BBA /* ReactCBLite.m in Sources */ = {isa = PBXBuildFile; fileRef = BE8EFD441C0E6D9000627BBA /* ReactCBLite.m */; };
 /* End PBXBuildFile section */
@@ -24,6 +25,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		1BAD8A6B1D6C58BC00AD08CF /* SyncObserver.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SyncObserver.h; sourceTree = "<group>"; };
+		1BAD8A6C1D6C58BC00AD08CF /* SyncObserver.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SyncObserver.m; sourceTree = "<group>"; };
 		9D3FF82B1D422DE600C58878 /* ReactCBLiteRequestHandler.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ReactCBLiteRequestHandler.h; sourceTree = "<group>"; };
 		9D3FF82C1D422DE600C58878 /* ReactCBLiteRequestHandler.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ReactCBLiteRequestHandler.m; sourceTree = "<group>"; };
 		BE8EFD251C0E6C6B00627BBA /* libReactCBLite.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libReactCBLite.a; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -47,6 +50,8 @@
 			children = (
 				BE8EFD431C0E6D9000627BBA /* ReactCBLite.h */,
 				BE8EFD441C0E6D9000627BBA /* ReactCBLite.m */,
+				1BAD8A6B1D6C58BC00AD08CF /* SyncObserver.h */,
+				1BAD8A6C1D6C58BC00AD08CF /* SyncObserver.m */,
 				9D3FF82B1D422DE600C58878 /* ReactCBLiteRequestHandler.h */,
 				9D3FF82C1D422DE600C58878 /* ReactCBLiteRequestHandler.m */,
 				BE8EFD261C0E6C6B00627BBA /* Products */,
@@ -117,6 +122,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1BAD8A6D1D6C58BC00AD08CF /* SyncObserver.m in Sources */,
 				BE8EFD451C0E6D9000627BBA /* ReactCBLite.m in Sources */,
 				9D3FF82D1D422DE600C58878 /* ReactCBLiteRequestHandler.m in Sources */,
 			);
