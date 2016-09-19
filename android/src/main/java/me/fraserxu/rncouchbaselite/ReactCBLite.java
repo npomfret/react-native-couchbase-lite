@@ -3,23 +3,26 @@ package me.fraserxu.rncouchbaselite;
 import android.net.Uri;
 import android.os.AsyncTask;
 
+import com.couchbase.lite.CouchbaseLiteException;
 import com.couchbase.lite.Database;
 import com.couchbase.lite.Manager;
 import com.couchbase.lite.View;
 import com.couchbase.lite.android.AndroidContext;
+import com.couchbase.lite.auth.Authenticator;
+import com.couchbase.lite.auth.AuthenticatorFactory;
 import com.couchbase.lite.javascript.JavaScriptReplicationFilterCompiler;
 import com.couchbase.lite.javascript.JavaScriptViewCompiler;
 import com.couchbase.lite.listener.Credentials;
 import com.couchbase.lite.listener.LiteListener;
+import com.couchbase.lite.replicator.Replication;
 import com.couchbase.lite.util.Log;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Callback;
+import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.WritableMap;
-import com.facebook.react.bridge.Promise;
-import com.facebook.react.bridge.Promise;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -281,11 +284,6 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
         });
 
         sync.start();
-import java.io.OutputStream;
-import java.util.Properties;
-
-import Acme.Serve.Serve;
-import java.util.concurrent.CountDownLatch;
     }
 
     @ReactMethod
