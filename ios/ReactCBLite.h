@@ -8,9 +8,11 @@
 
 #import <RCTBridgeModule.h>
 #import <CouchbaseLiteListener/CBLListener.h>
+#import <CouchbaseLite/CouchbaseLite.h>
 
 @interface ReactCBLite : NSObject <RCTBridgeModule>
 {
     CBLListener *listener;
+    CBLManager *manager;
 }
 @end
