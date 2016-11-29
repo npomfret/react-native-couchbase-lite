@@ -83,6 +83,43 @@ RCT_EXPORT_METHOD(initWithAuth:(NSString*)username password:(NSString*)password 
     }
 }
 
+RCT_EXPORT_METHOD(logLevel: (NSString*) level) {
+    // only debug and verbose are used
+
+    if(level == @"DEBUG") {
+        [CBLManager enableLogging:@"Database"];
+        [CBLManager enableLogging:@"View"];
+        [CBLManager enableLogging:@"Query"];
+        [CBLManager enableLogging:@"BLIP"];
+        [CBLManager enableLogging:@"CBLDatabase"];
+        [CBLManager enableLogging:@"CBLJSONMatcher"];
+        [CBLManager enableLogging:@"CBLListener"];
+        [CBLManager enableLogging:@"CBLModel"];
+        [CBLManager enableLogging:@"CBL_Router"];
+        [CBLManager enableLogging:@"CBL_Server"];
+        [CBLManager enableLogging:@"CBL_URLProtocol"];
+        [CBLManager enableLogging:@"CBLValidation"];
+        [CBLManager enableLogging:@"CBLRemoteRequest"];
+        [CBLManager enableLogging:@"CBLMultiStreamWriter"];
+        [CBLManager enableLogging:@"ChangeTracker"];
+        [CBLManager enableLogging:@"JSONSchema"];
+        [CBLManager enableLogging:@"MYDynamicObject"];
+        [CBLManager enableLogging:@"Query"];
+        [CBLManager enableLogging:@"RemoteRequest"];
+        [CBLManager enableLogging:@"Sync"];
+        [CBLManager enableLogging:@"View"];
+        [CBLManager enableLogging:@"WS"];
+    }
+
+    if(level == @"VERBOSE" || level == @"DEBUG") {
+        [CBLManager enableLogging:@"BLIPVerbose"];
+        [CBLManager enableLogging:@"CBLListenerVerbose"];
+        [CBLManager enableLogging:@"ChangeTrackerVerbose"];
+        [CBLManager enableLogging:@"SyncVerbose"];
+        [CBLManager enableLogging:@"ViewVerbose"];
+    }
+}
+
 // stop and start are needed because the OS appears to kill the listener when the app becomes inactive (when the screen is locked, or its put in the background)
 RCT_EXPORT_METHOD(startListener)
 {
