@@ -56,7 +56,9 @@ RCT_EXPORT_MODULE()
         
         NSOperationQueue *callbackQueue = [NSOperationQueue new];
         callbackQueue.maxConcurrentOperationCount = 1;
-        NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration backgroundSessionConfigurationWithIdentifier:@"rnbcl.background"];
+
+        // https://realm.io/news/gwendolyn-weston-ios-background-networking/
+        NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration backgroundSessionConfigurationWithIdentifier:[[NSUUID UUID] UUIDString]];
         
         // Register Couchbase Lite's NSURLProtocol. This allows CBL to handle HTTP requests made by this
         // session that target the internalURL of a CBLManager.
