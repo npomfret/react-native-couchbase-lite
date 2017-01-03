@@ -33,7 +33,11 @@ RCT_EXPORT_METHOD(initWithAuth:(NSString*)username password:(NSString*)password 
         NSLog(@"Launching Couchbase Lite...");
         // not using [CBLManager sharedInstance] because it doesn't behave well when the app is backgrounded
 
-        manager = [CBLManager sharedInstance];
+        NSError *error;
+
+        NSString* dir = [CBLManager defaultDirectory];
+        CBLManagerOptions options = {NO, NSDataWritingFileProtectionCompleteUntilFirstUserAuthentication};
+        manager = [[CBLManager alloc] initWithDirectory: dir options: &options error: &error];
 
         CBLRegisterJSViewCompiler();
 
