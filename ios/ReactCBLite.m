@@ -86,7 +86,7 @@ RCT_EXPORT_METHOD(initWithAuth:(NSString*)username password:(NSString*)password 
 RCT_EXPORT_METHOD(logLevel: (NSString*) level) {
     // only debug and verbose are used
 
-    if(level == @"VERBOSE" || level == @"DEBUG") {
+    if([level isEqualToString:@"VERBOSE"] || [level isEqualToString:@"DEBUG"]) {
         //docs aren't clear which of these are correct so I've added them all
 
         [CBLManager enableLogging:@"Database"];
@@ -113,7 +113,7 @@ RCT_EXPORT_METHOD(logLevel: (NSString*) level) {
         [CBLManager enableLogging:@"WS"];
     }
 
-    if(level == @"VERBOSE") {
+    if([level isEqualToString:@"VERBOSE"]) {
         [CBLManager enableLogging:@"BLIPVerbose"];
         [CBLManager enableLogging:@"CBLListenerVerbose"];
         [CBLManager enableLogging:@"ChangeTrackerVerbose"];
