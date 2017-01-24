@@ -39,7 +39,7 @@ RCT_EXPORT_METHOD(resumeReplications:(NSString*)databaseName){
     }
 }
 
-RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName url:(NSString*)url pushOrPull:(NSString*)type username:(NSString*)username password:(NSString*) password callback:(RCTResponseSenderBlock)callback){
+RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName url:(NSString*)url pushOrPull:(NSString*)type cookieName:(NSString*) cookieName sessionID:(NSString*)sessionID sessionExpiryDate:(NSString*) sessionExpiryDate sessionPath:(NSString*) path callback:(RCTResponseSenderBlock)callback){
     CBLDatabase* database = [manager databaseNamed:databaseName error:NULL];
 
     for(CBLReplication* repl in [database allReplications]) {
@@ -57,22 +57,26 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName url:(NSStri
 
     CBLReplication *repl;
 
-    NSURL* sgUrl = [NSURL URLWithString:url];
+    NSURL* syncGatewayURL = [NSURL URLWithString:url];
 
     if([type isEqualToString:@"push"]) {
-        repl = [database createPushReplication: sgUrl];
+        repl = [database createPushReplication: syncGatewayURL];
     } else if([type isEqualToString:@"pull"]) {
-        repl = [database createPullReplication: sgUrl];
+        repl = [database createPullReplication: syncGatewayURL];
     } else {
         callback(@[[NSNull null], @"type must be 'push' or 'pull'"]);
         return;
     }
 
-    repl.continuous = YES;
-    repl.authenticator = [CBLAuthenticator basicAuthenticatorWithName: username password: password];
-    [repl start];
+    NSDateFormatter* dateFormatter = [[NSDateFormatter alloc] init];
+    dateFormatter.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss.SSSZ";
+    NSDate* date = [dateFormatter dateFromString:sessionExpiryDate];
 
-    [[NSNotificationCenter defaultCenter] addObserverForName:kCBLReplicationChangeNotification object:nil queue:nil usingBlock:^(NSNotification *notification) {
+    repl.continuous = YES;
+    [repl setCookieNamed:cookieName withValue:sessionID path:path expirationDate:date secure:NO];
+
+    NSOperationQueue *operationQueue = [[NSOperationQueue alloc]init];
+    [[NSNotificationCenter defaultCenter] addObserverForName:kCBLReplicationChangeNotification object:repl queue:operationQueue usingBlock:^(NSNotification *notification) {
         NSDictionary *dictionary = @{
                                      @"changesCount": @(repl.changesCount),
                                      @"completedChangesCount": @(repl.completedChangesCount),
@@ -83,6 +87,16 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName url:(NSStri
 
         callback(@[dictionary, [NSNull null]]);
     }];
+
+    [[NSNotificationCenter defaultCenter] addObserver: self
+                                             selector: @selector(replicationChanged:)
+                                                 name: kCBLReplicationChangeNotification
+                                               object: repl];
+    [repl start];
+}
+
+- (void) replicationChanged: (NSNotification*)n {
+    NSLog(@"replicationChanged %@", n);
 }
 
 RCT_EXPORT_METHOD(initWithAuth:(NSString*)username password:(NSString*)password callback:(RCTResponseSenderBlock)callback)
