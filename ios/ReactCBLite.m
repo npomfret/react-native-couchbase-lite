@@ -27,6 +27,64 @@ RCT_EXPORT_METHOD(init:(RCTResponseSenderBlock)callback)
     [self initWithAuth:username password:password callback:callback];
 }
 
+RCT_EXPORT_METHOD(resumeReplications:(NSString*)databaseName){
+    CBLDatabase* database = [manager databaseNamed:databaseName error:NULL];
+
+    for(CBLReplication* repl in [database allReplications]) {
+        NSLog(@"repl => %@", repl);
+
+        if(repl.continuous && repl.suspended) {
+            repl.suspended = NO;
+        }
+    }
+}
+
+RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName url:(NSString*)url pushOrPull:(NSString*)type username:(NSString*)username password:(NSString*) password callback:(RCTResponseSenderBlock)callback){
+    CBLDatabase* database = [manager databaseNamed:databaseName error:NULL];
+
+    for(CBLReplication* repl in [database allReplications]) {
+
+        if(repl.continuous && !repl.pull && [type isEqualToString:@"push"]) {
+            NSLog(@"continuous replication task already exists => %@", repl);
+            return;
+        }
+
+        if(repl.continuous && repl.pull && [type isEqualToString:@"pull"]) {
+            NSLog(@"continuous replication task already exists => %@", repl);
+            return;
+        }
+    }
+
+    CBLReplication *repl;
+
+    NSURL* sgUrl = [NSURL URLWithString:url];
+
+    if([type isEqualToString:@"push"]) {
+        repl = [database createPushReplication: sgUrl];
+    } else if([type isEqualToString:@"pull"]) {
+        repl = [database createPullReplication: sgUrl];
+    } else {
+        callback(@[[NSNull null], @"type must be 'push' or 'pull'"]);
+        return;
+    }
+
+    repl.continuous = YES;
+    repl.authenticator = [CBLAuthenticator basicAuthenticatorWithName: username password: password];
+    [repl start];
+
+    [[NSNotificationCenter defaultCenter] addObserverForName:kCBLReplicationChangeNotification object:nil queue:nil usingBlock:^(NSNotification *notification) {
+        NSDictionary *dictionary = @{
+                                     @"changesCount": @(repl.changesCount),
+                                     @"completedChangesCount": @(repl.completedChangesCount),
+                                     @"running": @(repl.running),
+                                     @"status": @(repl.status),
+                                     @"suspended": @(repl.suspended)
+                                     };
+
+        callback(@[dictionary, [NSNull null]]);
+    }];
+}
+
 RCT_EXPORT_METHOD(initWithAuth:(NSString*)username password:(NSString*)password callback:(RCTResponseSenderBlock)callback)
 {
     @try {
