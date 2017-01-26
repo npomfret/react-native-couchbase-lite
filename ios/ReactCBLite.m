@@ -27,14 +27,24 @@ RCT_EXPORT_METHOD(init:(RCTResponseSenderBlock)callback)
     [self initWithAuth:username password:password callback:callback];
 }
 
-RCT_EXPORT_METHOD(resumeReplications:(NSString*)databaseName){
+RCT_EXPORT_METHOD(resumeContinuousReplications:(NSString*)databaseName){
     CBLDatabase* database = [manager databaseNamed:databaseName error:NULL];
-    
+
     for(CBLReplication* repl in [database allReplications]) {
-        NSLog(@"repl => %@", repl);
-        
         if(repl.continuous && repl.suspended) {
+            NSLog(@"resuming => %@", repl);
             repl.suspended = NO;
+        }
+    }
+}addeda
+
+RCT_EXPORT_METHOD(suspendContinuousReplications:(NSString*)databaseName){
+    CBLDatabase* database = [manager databaseNamed:databaseName error:NULL];
+
+    for(CBLReplication* repl in [database allReplications]) {
+        if(repl.continuous && !repl.suspended) {
+            NSLog(@"suspending => %@", repl);
+            repl.suspended = YES;
         }
     }
 }
