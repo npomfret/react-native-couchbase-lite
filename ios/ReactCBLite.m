@@ -36,7 +36,7 @@ RCT_EXPORT_METHOD(resumeContinuousReplications:(NSString*)databaseName){
             repl.suspended = NO;
         }
     }
-}addeda
+}
 
 RCT_EXPORT_METHOD(suspendContinuousReplications:(NSString*)databaseName){
     CBLDatabase* database = [manager databaseNamed:databaseName error:NULL];
