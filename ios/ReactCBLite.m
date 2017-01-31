@@ -55,12 +55,12 @@ RCT_EXPORT_METHOD(stopContinuousReplication:(NSString*)databaseName pushOrPull:(
     
     for(CBLReplication* repl in [database allReplications]) {
         if(repl.continuous && !repl.pull && [type isEqualToString:@"push"]) {
-            NSLog(@"Stopping %@ replication %@", type, repl);
+            NSLog(@"Stopping %@ replication: %@", type, repl);
             [repl stop];
         }
-        
+
         if(repl.continuous && repl.pull && [type isEqualToString:@"pull"]) {
-            NSLog(@"Stopping %@ replication %@", type, repl);
+            NSLog(@"Stopping %@ replication: %@", type, repl);
             [repl stop];
         }
     }
@@ -68,24 +68,24 @@ RCT_EXPORT_METHOD(stopContinuousReplication:(NSString*)databaseName pushOrPull:(
 
 RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName url:(NSString*)url pushOrPull:(NSString*)type cookieName:(NSString*) cookieName sessionID:(NSString*)sessionID sessionExpiryDate:(NSString*) sessionExpiryDate sessionPath:(NSString*) path callback:(RCTResponseSenderBlock)callback){
     CBLDatabase* database = [manager databaseNamed:databaseName error:NULL];
-    
+
     for(CBLReplication* repl in [database allReplications]) {
-        
+
         if(repl.continuous && !repl.pull && [type isEqualToString:@"push"]) {
             NSLog(@"continuous replication task already exists => %@", repl);
             return;
         }
-        
+
         if(repl.continuous && repl.pull && [type isEqualToString:@"pull"]) {
             NSLog(@"continuous replication task already exists => %@", repl);
             return;
         }
     }
-    
+
     CBLReplication *repl;
-    
+
     NSURL* syncGatewayURL = [NSURL URLWithString:url];
-    
+
     if([type isEqualToString:@"push"]) {
         repl = [database createPushReplication: syncGatewayURL];
     } else if([type isEqualToString:@"pull"]) {
@@ -94,14 +94,14 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName url:(NSStri
         callback(@[[NSNull null], @"type must be 'push' or 'pull'"]);
         return;
     }
-    
+
     NSDateFormatter* dateFormatter = [[NSDateFormatter alloc] init];
     dateFormatter.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss.SSSZ";
     NSDate* date = [dateFormatter dateFromString:sessionExpiryDate];
-    
+
     repl.continuous = YES;
     [repl setCookieNamed:cookieName withValue:sessionID path:path expirationDate:date secure:NO];
-    
+
     NSOperationQueue *operationQueue = [[NSOperationQueue alloc]init];
     [[NSNotificationCenter defaultCenter] addObserverForName:kCBLReplicationChangeNotification object:repl queue:operationQueue usingBlock:^(NSNotification *notification) {
         NSDictionary *dictionary = @{
@@ -111,10 +111,10 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName url:(NSStri
                                      @"status": @(repl.status),
                                      @"suspended": @(repl.suspended)
                                      };
-        
+
         callback(@[dictionary, [NSNull null]]);
     }];
-    
+
     [[NSNotificationCenter defaultCenter] addObserver: self
                                              selector: @selector(replicationChanged:)
                                                  name: kCBLReplicationChangeNotification
@@ -131,22 +131,22 @@ RCT_EXPORT_METHOD(initWithAuth:(NSString*)username password:(NSString*)password 
     @try {
         NSLog(@"Launching Couchbase Lite...");
         // not using [CBLManager sharedInstance] because it doesn't behave well when the app is backgrounded
-        
+
         NSError *error;
-        
+
         NSString* dir = [CBLManager defaultDirectory];
         CBLManagerOptions options = {NO, NSDataWritingFileProtectionCompleteUntilFirstUserAuthentication};
         manager = [[CBLManager alloc] initWithDirectory: dir options: &options error: &error];
-        
+
         CBLRegisterJSViewCompiler();
-        
+
         //register the server with CBL_URLProtocol
         [manager internalURL];
-        
+
         int suggestedPort = 5984;
-        
+
         listener = [self createListener:suggestedPort withUsername:username withPassword:password withCBLManager: manager];
-        
+
         NSLog(@"Couchbase Lite listening on port <%@>", listener.URL.port);
         NSString *extenalUrl = [NSString stringWithFormat:@"http://%@:%@@localhost:%@/", username, password, listener.URL.port];
         callback(@[extenalUrl, [NSNull null]]);
@@ -161,63 +161,55 @@ RCT_EXPORT_METHOD(initWithAuth:(NSString*)username password:(NSString*)password 
                    withPassword: (NSString *) password
                  withCBLManager: (CBLManager*) cblManager
 {
-    
+
     CBLListener* listener = [[CBLListener alloc] initWithManager:cblManager port:port];
     [listener setPasswords:@{username: password}];
-    
+
     NSLog(@"Trying port %d", port);
-    
+
     NSError *err = nil;
     BOOL success = [listener start: &err];
-    
+
     if (success) {
         NSLog(@"Couchbase Lite running on %@", listener.URL);
         return listener;
     } else {
         NSLog(@"Could not start listener on port %d: %@", port, err);
-        
+
         port++;
-        
+
         return [self createListener:port withUsername:username withPassword:password withCBLManager: cblManager];
     }
 }
 
 RCT_EXPORT_METHOD(logLevel: (NSString*) level) {
     // only debug and verbose are used
-    
+
     if([level isEqualToString:@"VERBOSE"] || [level isEqualToString:@"DEBUG"]) {
-        //docs aren't clear which of these are correct so I've added them all
-        
-        [CBLManager enableLogging:@"Database"];
-        [CBLManager enableLogging:@"View"];
-        [CBLManager enableLogging:@"Query"];
+        [CBLManager enableLogging:@"ArrayDiff"];
         [CBLManager enableLogging:@"BLIP"];
-        [CBLManager enableLogging:@"CBLDatabase"];
-        [CBLManager enableLogging:@"CBLJSONMatcher"];
-        [CBLManager enableLogging:@"CBLListener"];
-        [CBLManager enableLogging:@"CBLModel"];
-        [CBLManager enableLogging:@"CBL_Router"];
-        [CBLManager enableLogging:@"CBL_Server"];
-        [CBLManager enableLogging:@"CBL_URLProtocol"];
-        [CBLManager enableLogging:@"CBLValidation"];
-        [CBLManager enableLogging:@"CBLRemoteRequest"];
-        [CBLManager enableLogging:@"CBLMultiStreamWriter"];
+        [CBLManager enableLogging:@"BLIPLifecycle"];
         [CBLManager enableLogging:@"ChangeTracker"];
-        [CBLManager enableLogging:@"JSONSchema"];
-        [CBLManager enableLogging:@"MYDynamicObject"];
+        [CBLManager enableLogging:@"Database"];
+        [CBLManager enableLogging:@"Listener"];
+        [CBLManager enableLogging:@"Model"];
+        [CBLManager enableLogging:@"MultiStreamWriter"];
         [CBLManager enableLogging:@"Query"];
+        [CBLManager enableLogging:@"Reachability"];
         [CBLManager enableLogging:@"RemoteRequest"];
+        [CBLManager enableLogging:@"Server"];
         [CBLManager enableLogging:@"Sync"];
+        [CBLManager enableLogging:@"Upgrade"];
+        [CBLManager enableLogging:@"Validation"];
         [CBLManager enableLogging:@"View"];
         [CBLManager enableLogging:@"WS"];
     }
-    
+
     if([level isEqualToString:@"VERBOSE"]) {
-        [CBLManager enableLogging:@"BLIPVerbose"];
-        [CBLManager enableLogging:@"CBLListenerVerbose"];
-        [CBLManager enableLogging:@"ChangeTrackerVerbose"];
-        [CBLManager enableLogging:@"SyncVerbose"];
-        [CBLManager enableLogging:@"ViewVerbose"];
+        [CBLManager enableLogging:@"JSONReader"];
+        [CBLManager enableLogging:@"SQL"];
+        [CBLManager enableLogging:@"Router"];
+        [CBLManager enableLogging:@"SyncPerf"];
     }
 }
 
