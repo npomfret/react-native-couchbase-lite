@@ -190,7 +190,6 @@ RCT_EXPORT_METHOD(logLevel: (NSString*) level) {
         [CBLManager enableLogging:@"BLIP"];
         [CBLManager enableLogging:@"BLIPLifecycle"];
         [CBLManager enableLogging:@"ChangeTracker"];
-        [CBLManager enableLogging:@"Database"];
         [CBLManager enableLogging:@"Listener"];
         [CBLManager enableLogging:@"Model"];
         [CBLManager enableLogging:@"MultiStreamWriter"];
@@ -206,6 +205,7 @@ RCT_EXPORT_METHOD(logLevel: (NSString*) level) {
     }
 
     if([level isEqualToString:@"VERBOSE"]) {
+        [CBLManager enableLogging:@"Database"];
         [CBLManager enableLogging:@"JSONReader"];
         [CBLManager enableLogging:@"SQL"];
         [CBLManager enableLogging:@"Router"];
