@@ -193,7 +193,6 @@ RCT_EXPORT_METHOD(logLevel: (NSString*) level) {
         [CBLManager enableLogging:@"Listener"];
         [CBLManager enableLogging:@"Model"];
         [CBLManager enableLogging:@"MultiStreamWriter"];
-        [CBLManager enableLogging:@"Query"];
         [CBLManager enableLogging:@"Reachability"];
         [CBLManager enableLogging:@"RemoteRequest"];
         [CBLManager enableLogging:@"Server"];
@@ -208,6 +207,7 @@ RCT_EXPORT_METHOD(logLevel: (NSString*) level) {
         [CBLManager enableLogging:@"Database"];
         [CBLManager enableLogging:@"JSONReader"];
         [CBLManager enableLogging:@"SQL"];
+        [CBLManager enableLogging:@"Query"];
         [CBLManager enableLogging:@"Router"];
         [CBLManager enableLogging:@"SyncPerf"];
     }
