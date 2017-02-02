@@ -153,16 +153,25 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
 
         Manager.enableLogging(Log.TAG, level);
         Manager.enableLogging(Log.TAG_SYNC, level);
-        Manager.enableLogging(Log.TAG_QUERY, level);
+        Manager.enableLogging(Log.TAG_BATCHER, level);
+        Manager.enableLogging(Log.TAG_SYNC_ASYNC_TASK, level);
+        Manager.enableLogging(Log.TAG_REMOTE_REQUEST, level);
         Manager.enableLogging(Log.TAG_VIEW, level);
+        Manager.enableLogging(Log.TAG_QUERY, level);
         Manager.enableLogging(Log.TAG_CHANGE_TRACKER, level);
-        Manager.enableLogging(Log.TAG_BLOB_STORE, level);
+        Manager.enableLogging(Log.TAG_ROUTER, level);
         Manager.enableLogging(Log.TAG_DATABASE, level);
         Manager.enableLogging(Log.TAG_LISTENER, level);
         Manager.enableLogging(Log.TAG_MULTI_STREAM_WRITER, level);
-        Manager.enableLogging(Log.TAG_REMOTE_REQUEST, level);
-        Manager.enableLogging(Log.TAG_ROUTER, level);
+        Manager.enableLogging(Log.TAG_BLOB_STORE, level);
+        Manager.enableLogging(Log.TAG_SYMMETRIC_KEY, level);
+        Manager.enableLogging(Log.TAG_ACTION, level);
     }
+
+    /*
+        use this regexp in android studio
+        CBLite|Sync|Batcher|SyncAsyncTask|RemoteRequest|View|Query|ChangeTracker|Router|Database|Listener|MultistreamWriter|BlobStore|SymmetricKey|Action
+    */
 
     @ReactMethod
     public void stopListener() {
