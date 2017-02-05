@@ -71,12 +71,12 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName url:(NSStri
 
     for(CBLReplication* repl in [database allReplications]) {
 
-        if(repl.continuous && !repl.pull && [type isEqualToString:@"push"]) {
+        if(repl.continuous && !repl.pull && [type isEqualToString:@"push"] && repl.status != kCBLReplicationOffline) {
             NSLog(@"continuous replication task already exists => %@", repl);
             return;
         }
 
-        if(repl.continuous && repl.pull && [type isEqualToString:@"pull"]) {
+        if(repl.continuous && repl.pull && [type isEqualToString:@"pull"] && repl.status != kCBLReplicationOffline) {
             NSLog(@"continuous replication task already exists => %@", repl);
             return;
         }
