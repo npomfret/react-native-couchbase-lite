@@ -205,7 +205,7 @@ RCT_EXPORT_METHOD(logLevel: (NSString*) level) {
 
     if([level isEqualToString:@"VERBOSE"]) {
         [CBLManager enableLogging:@"Database"];
-        [CBLManager enableLogging:@"JSONReader"];
+        //[CBLManager enableLogging:@"JSONReader"];
         [CBLManager enableLogging:@"SQL"];
         [CBLManager enableLogging:@"Query"];
         [CBLManager enableLogging:@"Router"];
