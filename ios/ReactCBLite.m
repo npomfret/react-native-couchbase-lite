@@ -20,6 +20,10 @@
 
 RCT_EXPORT_MODULE()
 
+- (NSArray<NSString *> *)supportedEvents {
+    return @[@"replicationChanged"];
+}
+
 RCT_EXPORT_METHOD(init:(RCTResponseSenderBlock)callback)
 {
     NSString* username = [NSString stringWithFormat:@"u%d", arc4random() % 100000000];
@@ -50,9 +54,9 @@ RCT_EXPORT_METHOD(suspendContinuousReplications:(NSString*)databaseName){
 }
 
 RCT_EXPORT_METHOD(stopContinuousReplication:(NSString*)databaseName pushOrPull:(NSString*)type) {
-    
+
     CBLDatabase* database = [manager databaseNamed:databaseName error:NULL];
-    
+
     for(CBLReplication* repl in [database allReplications]) {
         if(repl.continuous && !repl.pull && [type isEqualToString:@"push"]) {
             NSLog(@"Stopping %@ replication: %@", type, repl);
@@ -99,31 +103,49 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName url:(NSStri
     dateFormatter.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss.SSSZ";
     NSDate* date = [dateFormatter dateFromString:sessionExpiryDate];
 
-    repl.continuous = YES;
     [repl setCookieNamed:cookieName withValue:sessionID path:path expirationDate:date secure:NO];
 
-    NSOperationQueue *operationQueue = [[NSOperationQueue alloc]init];
-    [[NSNotificationCenter defaultCenter] addObserverForName:kCBLReplicationChangeNotification object:repl queue:operationQueue usingBlock:^(NSNotification *notification) {
+    repl.continuous = YES;
+
+    [[NSNotificationCenter defaultCenter] addObserverForName:kCBLReplicationChangeNotification object:repl queue:nil usingBlock:^(NSNotification *notification) {
+
+        NSString *status;
+        if (repl.status == kCBLReplicationActive) {
+            NSLog(@"Repication in progress");
+            status = @"in-progrss";
+        } else if (repl.status == kCBLReplicationOffline) {
+            NSLog(@"Sync in offline");
+            status = @"offline";
+        } else if (repl.status == kCBLReplicationStopped) {
+            NSLog(@"Sync in stopped");
+            status = @"in-stopped";
+        } else if (repl.status == kCBLReplicationIdle) {
+            NSLog(@"Sync in idle");
+            status = @"in-idle";
+        }
+
+        NSError *error = repl.lastError;
+        if(error) {
+            status = @"error";
+            NSLog(@"replication error %@", error.code);
+        }
+
         NSDictionary *dictionary = @{
+                                     @"type": type,
                                      @"changesCount": @(repl.changesCount),
                                      @"completedChangesCount": @(repl.completedChangesCount),
                                      @"running": @(repl.running),
-                                     @"status": @(repl.status),
-                                     @"suspended": @(repl.suspended)
+                                     @"status": status,
+                                     @"suspended": @(repl.suspended),
                                      };
 
-        callback(@[dictionary, [NSNull null]]);
+        [self sendEventWithName:@"replicationChanged" body:dictionary];
+
     }];
 
-    [[NSNotificationCenter defaultCenter] addObserver: self
-                                             selector: @selector(replicationChanged:)
-                                                 name: kCBLReplicationChangeNotification
-                                               object: repl];
     [repl start];
-}
 
-- (void) replicationChanged: (NSNotification*)n {
-    NSLog(@"replicationChanged %@", n);
+    callback(@[@"replication started", [NSNull null]]);
 }
 
 RCT_EXPORT_METHOD(initWithAuth:(NSString*)username password:(NSString*)password callback:(RCTResponseSenderBlock)callback)

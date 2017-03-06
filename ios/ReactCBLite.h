@@ -9,8 +9,9 @@
 #import <RCTBridgeModule.h>
 #import <CouchbaseLiteListener/CBLListener.h>
 #import <CouchbaseLite/CouchbaseLite.h>
+#import "RCTEventEmitter.h"
 
-@interface ReactCBLite : NSObject <RCTBridgeModule>
+@interface ReactCBLite : RCTEventEmitter <RCTBridgeModule>
 {
     CBLListener *listener;
     CBLManager *manager;
