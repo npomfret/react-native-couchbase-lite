@@ -7,9 +7,9 @@
 //
 
 #import <React/RCTBridgeModule.h>
+#import <React/RCTEventEmitter.h>
 #import <CouchbaseLiteListener/CBLListener.h>
 #import <CouchbaseLite/CouchbaseLite.h>
-#import "RCTEventEmitter.h"
 
 @interface ReactCBLite : RCTEventEmitter <RCTBridgeModule>
 {
