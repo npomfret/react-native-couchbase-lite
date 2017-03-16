@@ -206,16 +206,10 @@
 		BE8EFD2F1C0E6C6B00627BBA /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/../ReactNativeCouchbaseLiteExample/ios",
-					"$(SRCROOT)/../../../ios",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../../../ios";
 				HEADER_SEARCH_PATHS = (
-					"$(SRCROOT)/../ReactNativeCouchbaseLiteExample/node_modules/react-native/React/**",
-					"$(SRCROOT)/../../react-native/React/**",
 					"$(inherited)",
-					"$(SRCROOT)/../ReactNativeCouchbaseLiteExample/ios",
+					"$(SRCROOT)/../../react-native/React/**",
 					"$(SRCROOT)/../../../ios",
 				);
 				LIBRARY_SEARCH_PATHS = "";
@@ -229,16 +223,10 @@
 		BE8EFD301C0E6C6B00627BBA /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/../ReactNativeCouchbaseLiteExample/ios",
-					"$(SRCROOT)/../../../ios",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../../../ios";
 				HEADER_SEARCH_PATHS = (
-					"$(SRCROOT)/../ReactNativeCouchbaseLiteExample/node_modules/react-native/React/**",
-					"$(SRCROOT)/../../react-native/React/**",
 					"$(inherited)",
-					"$(SRCROOT)/../ReactNativeCouchbaseLiteExample/ios",
+					"$(SRCROOT)/../../react-native/React/**",
 					"$(SRCROOT)/../../../ios",
 				);
 				LIBRARY_SEARCH_PATHS = "";
