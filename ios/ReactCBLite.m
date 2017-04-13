@@ -165,11 +165,13 @@ RCT_EXPORT_METHOD(initWithAuth:(NSString*)username password:(NSString*)password 
         NSLog(@"cbl dir: %@", dir);
         [fileManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:@{NSFileProtectionKey: NSFileProtectionCompleteUntilFirstUserAuthentication} error:&error];
         
-        NSArray *files = [fileManager contentsOfDirectoryAtPath:oldDir error:&error];
         NSError *fileMoveError;
-        for (NSString *file in files) {
+        for (NSString *file in [fileManager contentsOfDirectoryAtPath:oldDir error:&error]) {
             NSString *sourcePath = [oldDir stringByAppendingPathComponent:file];
             NSString *targetPath = [dir stringByAppendingPathComponent:file];
+            
+            NSLog(@"Moving cbl files: %@ to %@", sourcePath, targetPath);
+            
             [fileManager moveItemAtPath:sourcePath
                         toPath:targetPath
                          error:&fileMoveError];
@@ -177,6 +179,10 @@ RCT_EXPORT_METHOD(initWithAuth:(NSString*)username password:(NSString*)password 
             if(fileMoveError) {
                 NSLog(@"error movng file %@, %@", file, [fileMoveError description]);
             }
+        }
+
+        for (NSString *file in [fileManager contentsOfDirectoryAtPath:oldDir error:&error]) {
+            NSLog(@"Found cbl file: %@", file);
         }
         
         CBLManagerOptions options = {
