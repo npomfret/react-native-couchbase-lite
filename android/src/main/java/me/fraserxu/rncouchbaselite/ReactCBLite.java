@@ -17,7 +17,9 @@ import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.WritableNativeMap;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -33,6 +35,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.util.Arrays;
 import java.util.Properties;
+import java.util.UUID;
 
 import Acme.Serve.Serve;
 
@@ -60,12 +63,6 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
     @Override
     public String getName() {
         return REACT_CLASS;
-    }
-
-    @ReactMethod
-    public void init(Callback callback) {
-        Credentials allowedCredentials = new Credentials();
-        this.initWithCredentials(allowedCredentials, callback);
     }
 
     @ReactMethod
@@ -97,13 +94,21 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void initWithAuth(String username, String password, Callback callback) {
+    public void init(ReadableMap options, Callback callback) {
+        String username = UUID.randomUUID().toString();
+        if (options.hasKey("username"))
+            username = options.getString("username");
+
+        String password = UUID.randomUUID().toString();
+        if (options.hasKey("password"))
+            password = options.getString("password");
+
         Credentials credentials;
         if (username == null && password == null) {
             credentials = null;
             Log.w(TAG, "No credential specified, your listener is unsecured and you are putting your data at risk");
         } else if (username == null || password == null) {
-            callback.invoke(null, "username and password must not be null");
+            callback.invoke(null, "invalid options, username and password must both be non-null values OR must both be null values");
             return;
         } else {
             credentials = new Credentials(username, password);
@@ -125,22 +130,16 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
 
             this.startListener();
 
-            String url;
-            if (credentials != null) {
-                url = String.format(
-                        "http://%s:%s@localhost:%d/",
-                        credentials.getLogin(),
-                        credentials.getPassword(),
-                        listener.getListenPort()
-                );
-            } else {
-                url = String.format(
-                        "http://localhost:%d/",
-                        listener.getListenPort()
-                );
+            WritableMap response = new WritableNativeMap();
+            response.putInt("listenerPort", listener.getListenPort());
+            response.putString("listenerHost", "localhost");
+            response.putString("listenerUrl", String.format("http://localhost:%d/", listener.getListenPort()));
+            if(credentials != null) {
+                response.putString("listenerUrlWithAuth", String.format("http://%s:%s@localhost:%d/", credentials.getLogin(), credentials.getPassword(), listener.getListenPort()));
+                response.putString("username", credentials.getLogin());
+                response.putString("password", credentials.getPassword());
             }
-
-            callback.invoke(url, null);
+            callback.invoke(response, null);
 
         } catch (final Exception e) {
             Log.e(TAG, "Couchbase init failed", e);
