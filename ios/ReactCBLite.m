@@ -261,7 +261,7 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
     CBLReplication *repl = [notification object];
     NSString *type = [repl pull] ? @"pull" : @"push";
     
-    NSString *status;
+    NSString *status = @"unknown";
     if (repl.status == kCBLReplicationActive) {
         NSLog(@"Repication in progress");
         status = @"in-progrss";
