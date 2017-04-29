@@ -244,48 +244,56 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
     
     repl.continuous = YES;
     
-    [[NSNotificationCenter defaultCenter] addObserverForName:kCBLReplicationChangeNotification object:repl queue:nil usingBlock:^(NSNotification *notification) {
-        
-        NSString *status;
-        if (repl.status == kCBLReplicationActive) {
-            NSLog(@"Repication in progress");
-            status = @"in-progrss";
-        } else if (repl.status == kCBLReplicationOffline) {
-            NSLog(@"Repication in offline state");
-            status = @"offline";
-        } else if (repl.status == kCBLReplicationStopped) {
-            NSLog(@"Repication in stopped state");
-            status = @"in-stopped";
-        } else if (repl.status == kCBLReplicationIdle) {
-            NSLog(@"Repication in idle state");
-            status = @"in-idle";
-        }
-        
-        NSError *error = repl.lastError;
-        if(error) {
-            status = @"error";
-            NSLog(@"replication error %ld", (long)error.code);
-        }
-        
-        NSDictionary *dictionary = @{
-                                     @"type": type,
-                                     @"changesCount": @(repl.changesCount),
-                                     @"completedChangesCount": @(repl.completedChangesCount),
-                                     @"running": @(repl.running),
-                                     @"status": status,
-                                     @"suspended": @(repl.suspended),
-                                     };
-        
-        [self sendEventWithName:@"replicationChanged" body:dictionary];
-        
-    }];
-    
+    [[NSNotificationCenter defaultCenter] addObserver: self
+                                             selector: @selector(replicationChanged:)
+                                                 name: kCBLReplicationChangeNotification
+                                               object: repl];
+
     [repl start];
     
     NSString *message = [NSString stringWithFormat:@"%@ continuous replication started", type];
     NSLog(@"%@", message);
     
     callback(@[message, [NSNull null]]);
+}
+
+- (void) replicationChanged: (NSNotification*)notification {
+    CBLReplication *repl = [notification object];
+    NSString *type = [repl pull] ? @"pull" : @"push";
+    
+    NSString *status;
+    if (repl.status == kCBLReplicationActive) {
+        NSLog(@"Repication in progress");
+        status = @"in-progrss";
+    } else if (repl.status == kCBLReplicationOffline) {
+        NSLog(@"Repication in offline state");
+        status = @"offline";
+    } else if (repl.status == kCBLReplicationStopped) {
+        NSLog(@"Repication in stopped state");
+        status = @"in-stopped";
+    } else if (repl.status == kCBLReplicationIdle) {
+        NSLog(@"Repication in idle state");
+        status = @"in-idle";
+    }
+    
+    long lastErrorCode = -1;
+    NSError *error = repl.lastError;
+    if(error) {
+        lastErrorCode = (long)error.code;
+        NSLog(@"replication error %ld", lastErrorCode);
+    }
+    
+    NSDictionary *dictionary = @{
+                                 @"type": type,
+                                 @"changesCount": @(repl.changesCount),
+                                 @"completedChangesCount": @(repl.completedChangesCount),
+                                 @"running": @(repl.running),
+                                 @"status": status,
+                                 @"suspended": @(repl.suspended),
+                                 @"lastErrorCode": @(lastErrorCode)
+                                 };
+    
+    [self sendEventWithName:@"replicationChanged" body:dictionary];
 }
 
 RCT_EXPORT_METHOD(upload:(NSString *)method
