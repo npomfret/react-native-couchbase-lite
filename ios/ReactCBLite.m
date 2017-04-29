@@ -193,8 +193,10 @@ RCT_EXPORT_METHOD(stopContinuousReplication:(NSString*)databaseName pushOrPull:(
     }
 }
 
-RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName url:(NSString*)url pushOrPull:(NSString*)type cookieName:(NSString*) cookieName sessionID:(NSString*)sessionID sessionExpiryDate:(NSString*) sessionExpiryDate sessionPath:(NSString*) path callback:(RCTResponseSenderBlock)callback){
+RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*)url :(NSDictionary*)options :(RCTResponseSenderBlock)callback){
     CBLDatabase* database = [manager databaseNamed:databaseName error:NULL];
+
+    NSString *type = [options valueForKey:@"type"];
     
     for(CBLReplication* repl in [database allReplications]) {
         
@@ -222,11 +224,23 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName url:(NSStri
         return;
     }
     
-    NSDateFormatter* dateFormatter = [[NSDateFormatter alloc] init];
-    dateFormatter.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss.SSSZ";
-    NSDate* date = [dateFormatter dateFromString:sessionExpiryDate];
+    NSString *sessionID = [options valueForKey:@"sessionId"];
+
+    NSString *cookieName = @"SyncGatewaySession";
+    if([options valueForKey:@"cookieName"]) {
+        cookieName = [options valueForKey:@"cookieName"];
+    }
+
+    NSString *path = nil;//todo: add to options
     
-    [repl setCookieNamed:cookieName withValue:sessionID path:path expirationDate:date secure:NO];
+    NSDate *expirationDate = nil;//todo: add to options (and format)
+
+    BOOL secure = NO;
+    if([options valueForKey:@"secure"]) {
+        secure = [[options valueForKey:@"secure"] boolValue] ? YES : NO;
+    }
+    
+    [repl setCookieNamed:cookieName withValue:sessionID path:path expirationDate:expirationDate secure:secure];
     
     repl.continuous = YES;
     
@@ -237,20 +251,20 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName url:(NSStri
             NSLog(@"Repication in progress");
             status = @"in-progrss";
         } else if (repl.status == kCBLReplicationOffline) {
-            NSLog(@"Sync in offline");
+            NSLog(@"Repication in offline state");
             status = @"offline";
         } else if (repl.status == kCBLReplicationStopped) {
-            NSLog(@"Sync in stopped");
+            NSLog(@"Repication in stopped state");
             status = @"in-stopped";
         } else if (repl.status == kCBLReplicationIdle) {
-            NSLog(@"Sync in idle");
+            NSLog(@"Repication in idle state");
             status = @"in-idle";
         }
         
         NSError *error = repl.lastError;
         if(error) {
             status = @"error";
-            NSLog(@"replication error %@", error.code);
+            NSLog(@"replication error %ld", (long)error.code);
         }
         
         NSDictionary *dictionary = @{
@@ -268,7 +282,10 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName url:(NSStri
     
     [repl start];
     
-    callback(@[@"replication started", [NSNull null]]);
+    NSString *message = [NSString stringWithFormat:@"%@ continuous replication started", type];
+    NSLog(@"%@", message);
+    
+    callback(@[message, [NSNull null]]);
 }
 
 RCT_EXPORT_METHOD(upload:(NSString *)method
