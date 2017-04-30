@@ -20,19 +20,28 @@
 
 RCT_EXPORT_MODULE()
 
-- (NSArray<NSString *> *)supportedEvents {
+- (dispatch_queue_t)methodQueue
+{
+    return dispatch_queue_create("RNCBL.Queue", DISPATCH_QUEUE_SERIAL);
+}
+
+- (NSArray<NSString *> *)supportedEvents
+{
     return @[@"replicationChanged"];
 }
 
-RCT_EXPORT_METHOD(init:(NSDictionary*)options callback:(RCTResponseSenderBlock)callback)
+const int DEFAULT_PORT = 5984;
+
+RCT_EXPORT_METHOD(init:(NSDictionary*)options :(RCTPromiseResolveBlock)resolve :(RCTPromiseRejectBlock)reject)
 {
     @try {
-        NSLog(@"Launching Couchbase Lite...");
+        RCTLogInfo(@"Launching Couchbase Lite...");
+        
         // not using [CBLManager sharedInstance] because it doesn't behave well when the app is backgrounded
         NSString *username = [options objectForKey:@"username"];
         NSString *password = [options objectForKey:@"password"];
         NSString *databaseDir = [options objectForKey:@"databaseDir"];
-
+        
         if(!databaseDir) {
             databaseDir = [CBLManager defaultDirectory];
         }
@@ -44,7 +53,7 @@ RCT_EXPORT_METHOD(init:(NSDictionary*)options callback:(RCTResponseSenderBlock)c
         if(!password) {
             password = [NSString stringWithFormat:@"p%d", arc4random() % 100000000];
         }
-
+        
         NSError *error;
         
         CBLManagerOptions options = {
@@ -52,62 +61,64 @@ RCT_EXPORT_METHOD(init:(NSDictionary*)options callback:(RCTResponseSenderBlock)c
             NSDataWritingFileProtectionCompleteUntilFirstUserAuthentication//fileProtection
         };
         manager = [[CBLManager alloc] initWithDirectory:databaseDir options:&options error:&error];
-
+        
+        if(error) {
+            return reject(@"cbl error", @"failed to start", error);
+        }
+        
         CBLRegisterJSViewCompiler();
-
+        
         //register the server with CBL_URLProtocol
         [manager internalURL];
-
-        int suggestedPort = 5984;
-
-        listener = [self createListener:suggestedPort withUsername:username withPassword:password withCBLManager: manager];
-
-        NSLog(@"Couchbase Lite listening on port <%@>", listener.URL.port);
-
-        callback(@[@{
-                       @"listenerPort": listener.URL.port,
-                       @"listenerHost": listener.URL.host,
-                       @"listenerUrl": [listener.URL absoluteString],
-                       @"listenerUrlWithAuth": [NSString stringWithFormat:@"http://%@:%@@localhost:%@/", username, password, listener.URL.port],
-                       @"iosInternalUrl": @"http://lite.couchbase./",
-                       @"username": username,
-                       @"password": password
-                       }, [NSNull null]]);
+        
+        listener = [ReactCBLite createListener:DEFAULT_PORT withUsername:username withPassword:password withCBLManager: manager];
+        
+        RCTLogTrace(@"Couchbase Lite listening on port <%@>", listener.URL.port);
+        
+        resolve(@{
+                  @"listenerPort": listener.URL.port,
+                  @"listenerHost": listener.URL.host,
+                  @"listenerUrl": [listener.URL absoluteString],
+                  @"listenerUrlWithAuth": [NSString stringWithFormat:@"http://%@:%@@localhost:%@/", username, password, listener.URL.port],
+                  @"iosInternalUrl": @"http://lite.couchbase./",
+                  @"username": username,
+                  @"password": password
+                  });
     } @catch (NSException *e) {
-        NSLog(@"Failed to start Couchbase lite: %@", e);
-        callback(@[[NSNull null], e.reason]);
+        RCTLogError(@"Failed to start Couchbase lite: %@", e);
+        reject(@"cbl error", e.reason, nil);
     }
 }
 
-- (CBLListener*) createListener: (int) port
++ (CBLListener*) createListener: (int) port
                    withUsername: (NSString *) username
                    withPassword: (NSString *) password
                  withCBLManager: (CBLManager*) cblManager
 {
-
-    CBLListener* listener = [[CBLListener alloc] initWithManager:cblManager port:port];
-    [listener setPasswords:@{username: password}];
-
-    NSLog(@"Trying port %d", port);
-
+    
+    CBLListener *cblLlistener = [[CBLListener alloc] initWithManager:cblManager port:port];
+    [cblLlistener setPasswords:@{username: password}];
+    
+    RCTLogTrace(@"Trying port %d", port);
+    
     NSError *err = nil;
-    BOOL success = [listener start: &err];
-
+    BOOL success = [cblLlistener start: &err];
+    
     if (success) {
-        NSLog(@"Couchbase Lite running on %@", listener.URL);
-        return listener;
+        RCTLogInfo(@"Couchbase Lite running on %@", cblLlistener.URL);
+        return cblLlistener;
     } else {
-        NSLog(@"Could not start listener on port %d: %@", port, err);
-
+        RCTLogTrace(@"Could not start listener on port %d: %@", port, err);
+        
         port++;
-
+        
         return [self createListener:port withUsername:username withPassword:password withCBLManager: cblManager];
     }
 }
 
-RCT_EXPORT_METHOD(logLevel: (NSString*) level) {
+RCT_EXPORT_METHOD(logLevel: (NSString*) level :(RCTPromiseResolveBlock)resolve :(RCTPromiseRejectBlock)reject) {
     // only debug and verbose are used
-
+    
     if([level isEqualToString:@"VERBOSE"] || [level isEqualToString:@"DEBUG"]) {
         [CBLManager enableLogging:@"ArrayDiff"];
         [CBLManager enableLogging:@"BLIP"];
@@ -125,7 +136,7 @@ RCT_EXPORT_METHOD(logLevel: (NSString*) level) {
         [CBLManager enableLogging:@"View"];
         [CBLManager enableLogging:@"WS"];
     }
-
+    
     if([level isEqualToString:@"VERBOSE"]) {
         [CBLManager enableLogging:@"Database"];
         //[CBLManager enableLogging:@"JSONReader"];
@@ -134,80 +145,91 @@ RCT_EXPORT_METHOD(logLevel: (NSString*) level) {
         [CBLManager enableLogging:@"Router"];
         [CBLManager enableLogging:@"SyncPerf"];
     }
+    
+    resolve(nil);
 }
 
 // stop and start are needed because the OS appears to kill the listener when the app becomes inactive (when the screen is locked, or its put in the background)
-RCT_EXPORT_METHOD(startListener)
+RCT_EXPORT_METHOD(startListener :(RCTPromiseResolveBlock)resolve :(RCTPromiseRejectBlock)reject)
 {
-    NSLog(@"Starting Couchbase Lite listener process");
+    RCTLogTrace(@"Starting Couchbase Lite listener process");
     NSError* error;
     if ([listener start:&error]) {
-        NSLog(@"Couchbase Lite listening at %@", listener.URL);
+        RCTLogInfo(@"Couchbase Lite listening at %@", listener.URL);
+        resolve(nil);
     } else {
-        NSLog(@"Couchbase Lite couldn't start listener at %@: %@", listener.URL, error.localizedDescription);
+        RCTLogWarn(@"Couchbase Lite couldn't start listener at %@: %@", listener.URL, error.localizedDescription);
+        reject(@"cbl error", error.description, error);
     }
 }
 
-RCT_EXPORT_METHOD(stopListener)
+RCT_EXPORT_METHOD(stopListener :(RCTPromiseResolveBlock)resolve :(RCTPromiseRejectBlock)reject)
 {
-    NSLog(@"Stopping Couchbase Lite listener process");
+    RCTLogInfo(@"Stopping Couchbase Lite listener process");
     [listener stop];
+    resolve(nil);
 }
 
-RCT_EXPORT_METHOD(resumeContinuousReplications:(NSString*)databaseName){
+RCT_EXPORT_METHOD(resumeContinuousReplications:(NSString*)databaseName :(RCTPromiseResolveBlock)resolve :(RCTPromiseRejectBlock)reject){
     CBLDatabase* database = [manager databaseNamed:databaseName error:NULL];
     
     for(CBLReplication* repl in [database allReplications]) {
         if(repl.continuous && repl.suspended) {
-            NSLog(@"resuming => %@", repl);
+            RCTLogInfo(@"resuming => %@", repl);
             repl.suspended = NO;
         }
     }
+    
+    resolve(nil);
 }
 
-RCT_EXPORT_METHOD(suspendContinuousReplications:(NSString*)databaseName){
+RCT_EXPORT_METHOD(suspendContinuousReplications:(NSString*)databaseName :(RCTPromiseResolveBlock)resolve :(RCTPromiseRejectBlock)reject){
     CBLDatabase* database = [manager databaseNamed:databaseName error:NULL];
     
     for(CBLReplication* repl in [database allReplications]) {
         if(repl.continuous && !repl.suspended) {
-            NSLog(@"suspending => %@", repl);
+            RCTLogInfo(@"suspending => %@", repl);
             repl.suspended = YES;
         }
     }
+    
+    resolve(nil);
 }
 
-RCT_EXPORT_METHOD(stopContinuousReplication:(NSString*)databaseName pushOrPull:(NSString*)type) {
+RCT_EXPORT_METHOD(stopContinuousReplication:(NSString*)databaseName pushOrPull:(NSString*)type :(RCTPromiseResolveBlock)resolve :(RCTPromiseRejectBlock)reject) {
     
     CBLDatabase* database = [manager databaseNamed:databaseName error:NULL];
     
     for(CBLReplication* repl in [database allReplications]) {
         if(repl.continuous && !repl.pull && [type isEqualToString:@"push"]) {
-            NSLog(@"Stopping %@ replication: %@", type, repl);
+            RCTLogInfo(@"Stopping %@ replication: %@", type, repl);
             [repl stop];
         }
         
         if(repl.continuous && repl.pull && [type isEqualToString:@"pull"]) {
-            NSLog(@"Stopping %@ replication: %@", type, repl);
+            RCTLogInfo(@"Stopping %@ replication: %@", type, repl);
             [repl stop];
         }
     }
+    
+    resolve(nil);
 }
 
-RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*)url :(NSDictionary*)options :(RCTResponseSenderBlock)callback){
+RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*)url :(NSDictionary*)options :(RCTPromiseResolveBlock)resolve :(RCTPromiseRejectBlock)reject){
     CBLDatabase* database = [manager databaseNamed:databaseName error:NULL];
-
+    
     NSString *type = [options valueForKey:@"type"];
     
     for(CBLReplication* repl in [database allReplications]) {
         
         if(repl.continuous && !repl.pull && [type isEqualToString:@"push"] && repl.status != kCBLReplicationOffline) {
-            NSLog(@"continuous replication task already exists => %@", repl);
-            return;
-        }
+            RCTLogTrace(@"continuous replication task already exists => %@", repl);
+            return resolve(nil);
+            }
         
         if(repl.continuous && repl.pull && [type isEqualToString:@"pull"] && repl.status != kCBLReplicationOffline) {
-            NSLog(@"continuous replication task already exists => %@", repl);
-            return;
+            RCTLogTrace(@"continuous replication task already exists => %@", repl);
+            return resolve(nil);
         }
     }
     
@@ -220,21 +242,20 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
     } else if([type isEqualToString:@"pull"]) {
         repl = [database createPullReplication: syncGatewayURL];
     } else {
-        callback(@[[NSNull null], @"type must be 'push' or 'pull'"]);
-        return;
+        return reject(@"cbl error", @"type must be 'push' or 'pull'", nil);
     }
     
     NSString *sessionID = [options valueForKey:@"sessionId"];
-
+    
     NSString *cookieName = @"SyncGatewaySession";
     if([options valueForKey:@"cookieName"]) {
         cookieName = [options valueForKey:@"cookieName"];
     }
-
+    
     NSString *path = nil;//todo: add to options
     
     NSDate *expirationDate = nil;//todo: add to options (and format)
-
+    
     BOOL secure = NO;
     if([options valueForKey:@"secure"]) {
         secure = [[options valueForKey:@"secure"] boolValue] ? YES : NO;
@@ -245,16 +266,16 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
     repl.continuous = YES;
     
     [[NSNotificationCenter defaultCenter] addObserver: self
-                                             selector: @selector(replicationChanged:)
+      selector: @selector(replicationChanged:)
                                                  name: kCBLReplicationChangeNotification
                                                object: repl];
-
+    
     [repl start];
     
     NSString *message = [NSString stringWithFormat:@"%@ continuous replication started", type];
-    NSLog(@"%@", message);
+    RCTLogInfo(@"%@", message);
     
-    callback(@[message, [NSNull null]]);
+    resolve(nil);
 }
 
 - (void) replicationChanged: (NSNotification*)notification {
@@ -263,16 +284,16 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
     
     NSString *status = @"unknown";
     if (repl.status == kCBLReplicationActive) {
-        NSLog(@"Repication in progress");
+        RCTLogTrace(@"Repication in progress");
         status = @"in-progrss";
     } else if (repl.status == kCBLReplicationOffline) {
-        NSLog(@"Repication in offline state");
+        RCTLogTrace(@"Repication in offline state");
         status = @"offline";
     } else if (repl.status == kCBLReplicationStopped) {
-        NSLog(@"Repication in stopped state");
+        RCTLogTrace(@"Repication in stopped state");
         status = @"in-stopped";
     } else if (repl.status == kCBLReplicationIdle) {
-        NSLog(@"Repication in idle state");
+        RCTLogTrace(@"Repication in idle state");
         status = @"in-idle";
     }
     
@@ -280,7 +301,7 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
     NSError *error = repl.lastError;
     if(error) {
         lastErrorCode = (long)error.code;
-        NSLog(@"replication error %ld", lastErrorCode);
+        RCTLogInfo(@"replication error %ld", lastErrorCode);
     }
     
     NSDictionary *dictionary = @{
@@ -297,11 +318,12 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
 }
 
 RCT_EXPORT_METHOD(upload:(NSString *)method
-                  authHeader:(NSString *)authHeader
-                  sourceUri:(NSString *)sourceUri
-                  targetUri:(NSString *)targetUri
-                  contentType:(NSString *)contentType
-                  callback:(RCTResponseSenderBlock)callback)
+                  :(NSString *)authHeader
+                  :(NSString *)sourceUri
+                  :(NSString *)targetUri
+                  :(NSString *)contentType
+                  :(RCTPromiseResolveBlock)resolve
+                  :(RCTPromiseRejectBlock)reject)
 {
     
     if([sourceUri hasPrefix:@"assets-library"]){
@@ -321,21 +343,18 @@ RCT_EXPORT_METHOD(upload:(NSString *)method
             NSUInteger buffered = [rep getBytes:buffer fromOffset:0.0 length:rep.size error:nil];
             NSData *data = [NSData dataWithBytesNoCopy:buffer length:buffered freeWhenDone:YES];
             
-            [self sendData:method authHeader:authHeader data:data targetUri:targetUri contentType:contentType callback:callback];
+            [self sendData:method authHeader:authHeader data:data targetUri:targetUri contentType:contentType resolve:resolve reject:reject];
         } failureBlock:^(NSError *error) {
-            NSLog(@"Error: %@",[error localizedDescription]);
-            NSMutableDictionary* returnStuff = [NSMutableDictionary dictionary];
-            [returnStuff setObject: [error localizedDescription] forKey:@"error"];
-            callback(@[returnStuff, [NSNull null]]);
+            return reject(@"cbl error", error.description, error);
         }];
     } else if ([sourceUri isAbsolutePath]) {
-        NSLog(@"Uploading attachment from file %@ to %@", sourceUri, targetUri);
+        RCTLogInfo(@"Uploading attachment from file %@ to %@", sourceUri, targetUri);
         NSData *data = [NSData dataWithContentsOfFile:sourceUri];
-        [self sendData:method authHeader:authHeader data:data targetUri:targetUri contentType:contentType callback:callback];
+        [self sendData:method authHeader:authHeader data:data targetUri:targetUri contentType:contentType resolve:resolve reject:reject];
     } else {
-        NSLog(@"Uploading attachment from uri %@ to %@", sourceUri, targetUri);
+        RCTLogInfo(@"Uploading attachment from uri %@ to %@", sourceUri, targetUri);
         NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:sourceUri]];
-        [self sendData:method authHeader:authHeader data:data targetUri:targetUri contentType:contentType callback:callback];
+        [self sendData:method authHeader:authHeader data:data targetUri:targetUri contentType:contentType resolve:resolve reject:reject];
     }
 }
 
@@ -344,8 +363,8 @@ RCT_EXPORT_METHOD(upload:(NSString *)method
              data:(NSData *)data
         targetUri:(NSString *)targetUri
       contentType:(NSString *)contentType
-         callback:(RCTResponseSenderBlock)callback
-{
+          resolve:(RCTPromiseResolveBlock)resolve
+           reject:(RCTPromiseRejectBlock)reject {
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:targetUri]];
     
     [request setHTTPMethod:method];
@@ -362,22 +381,10 @@ RCT_EXPORT_METHOD(upload:(NSString *)method
         NSData *receivedData = [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
         
         if (error) {
-            if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
-                NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse*)response;
-                
-                NSLog(@"HTTP Error: %ld %@", (long)httpResponse.statusCode, error);
-                
-                [returnStuff setObject: error forKey:@"error"];
-                [returnStuff setObject: [NSNumber numberWithFloat:httpResponse.statusCode] forKey:@"statusCode"];
-            } else {
-                NSLog(@"Error %@", error);
-                [returnStuff setObject: error forKey:@"error"];
-            }
-            
-            callback(@[returnStuff, [NSNull null]]);
+            return reject(@"cbl error", error.description, error);
         } else {
             NSString *responeString = [[NSString alloc] initWithData:receivedData encoding:NSUTF8StringEncoding];
-            NSLog(@"responeString %@", responeString);
+            RCTLogTrace(@"responeString %@", responeString);
             
             NSData *data = [responeString dataUsingEncoding:NSUTF8StringEncoding];
             id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
@@ -386,12 +393,12 @@ RCT_EXPORT_METHOD(upload:(NSString *)method
             
             if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
                 NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse*)response;
-                NSLog(@"status code %ld", (long)httpResponse.statusCode);
+                RCTLogTrace(@"status code %ld", (long)httpResponse.statusCode);
                 
                 [returnStuff setObject: [NSNumber numberWithFloat:httpResponse.statusCode] forKey:@"statusCode"];
             }
             
-            callback(@[[NSNull null], returnStuff]);
+            return resolve(returnStuff);
         }
     });
 }

@@ -14,6 +14,7 @@ import com.couchbase.lite.listener.LiteListener;
 import com.couchbase.lite.util.Log;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Callback;
+import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
@@ -66,7 +67,7 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public static void logLevel(String name) {
+    public static void logLevel(String name, Promise promise) {
         switch (name) {
             case "VERBOSE": {
                 setLogLevel(Log.VERBOSE);
@@ -91,10 +92,12 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
             case "ASSERT":
                 setLogLevel(Log.ASSERT);
         }
+        
+        promise.resolve(null);
     }
 
     @ReactMethod
-    public void init(ReadableMap options, Callback callback) {
+    public void init(ReadableMap options, Promise promise) {
         String username = UUID.randomUUID().toString();
         if (options.hasKey("username"))
             username = options.getString("username");
@@ -108,16 +111,16 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
             credentials = null;
             Log.w(TAG, "No credential specified, your listener is unsecured and you are putting your data at risk");
         } else if (username == null || password == null) {
-            callback.invoke(null, "invalid options, username and password must both be non-null values OR must both be null values");
+            promise.reject("cbl error", "invalid options, username and password must both be non-null values OR must both be null values");
             return;
         } else {
             credentials = new Credentials(username, password);
         }
 
-        this.initWithCredentials(credentials, callback);
+        this.initWithCredentials(credentials, promise);
     }
 
-    private void initWithCredentials(Credentials credentials, Callback callback) {
+    private void initWithCredentials(Credentials credentials, Promise promise) {
         this.allowedCredentials = credentials;
 
         try {
@@ -128,7 +131,7 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
 
             manager = new Manager(context, Manager.DEFAULT_OPTIONS);
 
-            this.startListener();
+            this._startListener();
 
             WritableMap response = new WritableNativeMap();
             response.putInt("listenerPort", listener.getListenPort());
@@ -139,11 +142,11 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
                 response.putString("username", credentials.getLogin());
                 response.putString("password", credentials.getPassword());
             }
-            callback.invoke(response, null);
+            promise.resolve(response);
 
         } catch (final Exception e) {
             Log.e(TAG, "Couchbase init failed", e);
-            callback.invoke(null, e.getMessage());
+            promise.reject("cbl error", e);
         }
     }
 
@@ -173,13 +176,19 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
     */
 
     @ReactMethod
-    public void stopListener() {
+    public void stopListener(Promise promise) {
         Log.i(TAG, "Stopping CBL listener on port " + listener.getListenPort());
         listener.stop();
+        promise.resolve(null);
     }
 
     @ReactMethod
-    public void startListener() {
+    public void startListener(Promise promise) {
+        _startListener();
+        promise.resolve(null);
+    }
+
+    private void _startListener() {
         if (listener == null) {
             if (allowedCredentials == null) {
                 Log.i(TAG, "No credentials, so binding to localhost");
@@ -199,33 +208,29 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void upload(String method, String authHeader, String sourceUri, String targetUri, String contentType, Callback callback) {
+    public void upload(String method, String authHeader, String sourceUri, String targetUri, String contentType, Promise promise) {
         if (method == null || !method.toUpperCase().equals("PUT")) {
-            callback.invoke("Bad parameter method: " + method);
+            promise.reject("cbl error", "Bad parameter method: " + method);
             return;
         }
         if (authHeader == null) {
-            callback.invoke("Bad parameter authHeader");
+            promise.reject("cbl error", "Bad parameter authHeader");
             return;
         }
         if (sourceUri == null) {
-            callback.invoke("Bad parameter sourceUri");
+            promise.reject("cbl error", "Bad parameter sourceUri");
             return;
         }
         if (targetUri == null) {
-            callback.invoke("Bad parameter targetUri");
+            promise.reject("cbl error", "Bad parameter targetUri");
             return;
         }
         if (contentType == null) {
-            callback.invoke("Bad parameter contentType");
-            return;
-        }
-        if (callback == null) {
-            Log.e(TAG, "no callback");
+            promise.reject("cbl error", "Bad parameter contentType");
             return;
         }
 
-        SaveAttachmentTask saveAttachmentTask = new SaveAttachmentTask(method, authHeader, sourceUri, targetUri, contentType, callback);
+        SaveAttachmentTask saveAttachmentTask = new SaveAttachmentTask(method, authHeader, sourceUri, targetUri, contentType, promise);
         saveAttachmentTask.execute();
     }
 
@@ -235,15 +240,15 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
         private final String sourceUri;
         private final String targetUri;
         private final String contentType;
-        private final Callback callback;
+        private final Promise promise;
 
-        private SaveAttachmentTask(String method, String authHeader, String sourceUri, String targetUri, String contentType, Callback callback) {
+        private SaveAttachmentTask(String method, String authHeader, String sourceUri, String targetUri, String contentType, Promise promise) {
             this.method = method;
             this.authHeader = authHeader;
             this.sourceUri = sourceUri;
             this.targetUri = targetUri;
             this.contentType = contentType;
-            this.callback = callback;
+            this.promise = promise;
         }
 
         @Override
@@ -325,15 +330,13 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
                 try {
                     JSONObject jsonObject = new JSONObject(uploadResult.response);
                     map.putMap("resp", convertJsonToMap(jsonObject));
-                    callback.invoke(null, map);
+                    promise.resolve(map);
                 } catch (JSONException e) {
-                    map.putString("error", uploadResult.response);
-                    callback.invoke(map, null);
+                    promise.reject("cbl error", uploadResult.response);
                     Log.e(TAG, "Failed to parse response from clb: " + uploadResult.response, e);
                 }
             } else {
-                map.putString("error", uploadResult.response);
-                callback.invoke(map, null);
+                promise.reject("cbl error", uploadResult.response);
             }
         }
     }
