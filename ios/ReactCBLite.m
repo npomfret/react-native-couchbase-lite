@@ -45,11 +45,11 @@ RCT_EXPORT_METHOD(init:(NSDictionary*)options :(RCTPromiseResolveBlock)resolve :
         }
         
         if(!username) {
-            username = [NSString stringWithFormat:@"u%d", arc4random() % 100000000];
+            username = [[NSUUID UUID] UUIDString];
         }
         
         if(!password) {
-            password = [NSString stringWithFormat:@"p%d", arc4random() % 100000000];
+            password = [[NSUUID UUID] UUIDString];
         }
         
         NSError *error;
