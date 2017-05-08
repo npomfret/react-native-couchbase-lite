@@ -345,7 +345,7 @@ public class ReactCBLite extends ReactContextBaseJavaModule implements Replicati
         nativeEvent.putBoolean("running", source.isRunning());
         nativeEvent.putString("status", event.getStatus().name());
         nativeEvent.putBoolean("suspended", source.isRunning());
-        nativeEvent.putString("lastErrorCode", event.getError() == null ? "" : event.getError().getMessage());
+        nativeEvent.putString("lastError", event.getError() == null ? "" : event.getError().getMessage());
 
         context.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                 .emit("replicationChanged", nativeEvent);
@@ -362,6 +362,7 @@ public class ReactCBLite extends ReactContextBaseJavaModule implements Replicati
             if (att != null) {
                 copy(att, path);
             }
+            promise.resolve(null);
         } catch (Exception e) {
             promise.reject("cbl error", "Failed to copy attachment", e);
         }

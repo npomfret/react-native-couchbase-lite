@@ -307,7 +307,7 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
                                  @"running": @(repl.running),
                                  @"status": status,
                                  @"suspended": @(repl.suspended),
-                                 @"lastErrorCode": @(lastErrorCode)
+                                 @"lastError": [NSString stringWithFormat:@"%ld", lastErrorCode ? lastErrorCode : -1]
                                  };
     
     [self sendEventWithName:@"replicationChanged" body:dictionary];
