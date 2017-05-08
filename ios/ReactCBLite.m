@@ -282,13 +282,13 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
     
     NSString *status = @"unknown";
     if (repl.status == kCBLReplicationActive) {
-        status = @"in-progress";
+        status = @"active";
     } else if (repl.status == kCBLReplicationOffline) {
         status = @"offline";
     } else if (repl.status == kCBLReplicationStopped) {
-        status = @"in-stopped";
+        status = @"stopped";
     } else if (repl.status == kCBLReplicationIdle) {
-        status = @"in-idle";
+        status = @"idle";
     }
     
     NSString *lastError = @"";
