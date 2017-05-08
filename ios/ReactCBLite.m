@@ -293,11 +293,12 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
         status = @"in-idle";
     }
     
-    long lastErrorCode = -1;
+    NSString *lastError = @"";
     NSError *error = repl.lastError;
     if(error) {
-        lastErrorCode = (long)error.code;
-        RCTLogInfo(@"rncbl - replication error %ld", lastErrorCode);
+        long lastErrorCode = (long)error.code;
+        lastError = error.description;
+        RCTLogInfo(@"rncbl - replication error %ld: %@", lastErrorCode, lastError);
     }
     
     NSDictionary *dictionary = @{
@@ -307,7 +308,7 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
                                  @"running": @(repl.running),
                                  @"status": status,
                                  @"suspended": @(repl.suspended),
-                                 @"lastError": [NSString stringWithFormat:@"%ld", lastErrorCode ? lastErrorCode : -1]
+                                 @"lastError": lastError
                                  };
     
     [self sendEventWithName:@"replicationChanged" body:dictionary];
