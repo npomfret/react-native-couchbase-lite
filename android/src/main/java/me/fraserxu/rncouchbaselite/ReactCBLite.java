@@ -232,17 +232,11 @@ public class ReactCBLite extends ReactContextBaseJavaModule implements Replicati
 
             boolean isPull = isPull(options.getString("type"));
 
-            for (Replication replication : database.getAllReplications()) {
-                if (replication.isContinuous()&& replication.getRemoteUrl().equals(remoteUrl)) {
-                    if (replication.isPull() && isPull) {
-                        Log.i(TAG, "replication already exists");
-                        promise.resolve(null);
-                        return;
-                    } else if (!replication.isPull() && !isPull) {
-                        Log.i(TAG, "replication already exists");
-                        promise.resolve(null);
-                        return;
-                    }
+            for (Replication replication : findContinuousReplications(database, isPull)) {
+                if (replication.getRemoteUrl().equals(remoteUrl)) {
+                    Log.i(TAG, "replication already exists");
+                    promise.resolve(null);
+                    return;
                 }
             }
 
@@ -276,19 +270,11 @@ public class ReactCBLite extends ReactContextBaseJavaModule implements Replicati
         try {
             Database database = manager.getDatabase(databaseName);
 
-            boolean isPull = isPull(pushOrPull);
-
-            for (Replication replication : database.getAllReplications()) {
-                if (replication.isContinuous()) {
-                    if (replication.isPull() && isPull) {
-                        Log.i(TAG, "stopping replication");
-                        replication.stop();
-                        replication.removeChangeListener(this);
-                    } else if (!replication.isPull() && !isPull) {
-                        Log.i(TAG, "stopping replication");
-                        replication.stop();
-                        replication.removeChangeListener(this);
-                    }
+            for (Replication replication : findContinuousReplications(database, isPull(pushOrPull))) {
+                if (replication.isPull()) {
+                    Log.i(TAG, "stopping replication");
+                    replication.stop();
+                    replication.removeChangeListener(this);
                 }
             }
 
@@ -299,13 +285,16 @@ public class ReactCBLite extends ReactContextBaseJavaModule implements Replicati
     }
 
     @ReactMethod
-    public void suspendContinuousReplications(String databaseName, String pushOrPull, Promise promise) {
+    public void suspendContinuousReplications(String databaseName, Promise promise) {
         try {
             Database database = manager.getDatabase(databaseName);
 
-            boolean isPull = isPull(pushOrPull);
+            for (Replication replication : findContinuousReplications(database, true)) {
+                Log.i(TAG, "suspending replication");
+                replication.goOffline();
+            }
 
-            for (Replication replication : findContinuousReplications(database, isPull)) {
+            for (Replication replication : findContinuousReplications(database, false)) {
                 Log.i(TAG, "suspending replication");
                 replication.goOffline();
             }
@@ -317,13 +306,16 @@ public class ReactCBLite extends ReactContextBaseJavaModule implements Replicati
     }
 
     @ReactMethod
-    public void resumeContinuousReplications(String databaseName, String pushOrPull, Promise promise) {
+    public void resumeContinuousReplications(String databaseName, Promise promise) {
         try {
             Database database = manager.getDatabase(databaseName);
 
-            boolean isPull = isPull(pushOrPull);
+            for (Replication replication : findContinuousReplications(database, true)) {
+                Log.i(TAG, "suspending replication");
+                replication.goOnline();
+            }
 
-            for (Replication replication : findContinuousReplications(database, isPull)) {
+            for (Replication replication : findContinuousReplications(database, false)) {
                 Log.i(TAG, "suspending replication");
                 replication.goOnline();
             }
@@ -344,7 +336,7 @@ public class ReactCBLite extends ReactContextBaseJavaModule implements Replicati
         nativeEvent.putInt("completedChangesCount", event.getCompletedChangeCount());
         nativeEvent.putBoolean("running", source.isRunning());
         nativeEvent.putString("status", event.getStatus().name());
-        nativeEvent.putBoolean("suspended", source.isRunning());
+        nativeEvent.putBoolean("suspended", !source.isRunning());
         nativeEvent.putString("lastError", event.getError() == null ? "" : event.getError().getMessage());
 
         context.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
