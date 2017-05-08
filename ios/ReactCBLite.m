@@ -225,7 +225,7 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
         if(repl.continuous && !repl.pull && [type isEqualToString:@"push"] && repl.status != kCBLReplicationOffline) {
             RCTLogTrace(@"rncbl - continuous replication task already exists => %@", repl);
             return resolve(nil);
-            }
+        }
         
         if(repl.continuous && repl.pull && [type isEqualToString:@"pull"] && repl.status != kCBLReplicationOffline) {
             RCTLogTrace(@"rncbl - continuous replication task already exists => %@", repl);
@@ -266,7 +266,7 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
     repl.continuous = YES;
     
     [[NSNotificationCenter defaultCenter] addObserver: self
-      selector: @selector(replicationChanged:)
+                                             selector: @selector(replicationChanged:)
                                                  name: kCBLReplicationChangeNotification
                                                object: repl];
     
@@ -311,6 +311,20 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
                                  };
     
     [self sendEventWithName:@"replicationChanged" body:dictionary];
+}
+
+RCT_EXPORT_METHOD(copyAttachment:(NSString *)databaseName :(NSString *)id :(NSString *)attachmentName :(NSString *)path :(RCTPromiseResolveBlock)resolve :(RCTPromiseRejectBlock)reject) {
+    CBLDatabase* database = [manager databaseNamed:databaseName error:NULL];
+    CBLDocument* doc = [database documentWithID: id];
+    CBLRevision* rev = doc.currentRevision;
+    CBLAttachment* att = [rev attachmentNamed: attachmentName];
+    if (att != nil) {
+        NSData* imageData = att.content;
+        [imageData writeToFile:path atomically:YES];
+        return resolve(nil);
+    }
+    
+    return reject(@"cbl error", @"cannot copy attachment", nil);
 }
 
 RCT_EXPORT_METHOD(upload:(NSString *)method

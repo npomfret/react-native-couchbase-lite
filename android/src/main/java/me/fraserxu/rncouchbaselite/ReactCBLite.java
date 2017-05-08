@@ -3,24 +3,32 @@ package me.fraserxu.rncouchbaselite;
 import android.net.Uri;
 import android.os.AsyncTask;
 
+import com.couchbase.lite.Attachment;
+import com.couchbase.lite.CouchbaseLiteException;
 import com.couchbase.lite.Database;
+import com.couchbase.lite.Document;
 import com.couchbase.lite.Manager;
+import com.couchbase.lite.Revision;
 import com.couchbase.lite.View;
 import com.couchbase.lite.android.AndroidContext;
 import com.couchbase.lite.javascript.JavaScriptReplicationFilterCompiler;
 import com.couchbase.lite.javascript.JavaScriptViewCompiler;
 import com.couchbase.lite.listener.Credentials;
 import com.couchbase.lite.listener.LiteListener;
+import com.couchbase.lite.replicator.Replication;
+import com.couchbase.lite.util.IOUtils;
 import com.couchbase.lite.util.Log;
 import com.facebook.react.bridge.Arguments;
-import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.WritableNativeMap;
+import com.facebook.react.modules.core.DeviceEventManagerModule;
+import com.facebook.react.uimanager.events.RCTEventEmitter;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -28,21 +36,29 @@ import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.security.AccessControlContext;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 
 import Acme.Serve.Serve;
 
+import static java.security.AccessController.getContext;
 import static me.fraserxu.rncouchbaselite.ReactNativeJson.convertJsonToMap;
 
-public class ReactCBLite extends ReactContextBaseJavaModule {
+public class ReactCBLite extends ReactContextBaseJavaModule implements Replication.ChangeListener {
 
     static {
         setLogLevel(Log.WARN);
@@ -92,7 +108,7 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
             case "ASSERT":
                 setLogLevel(Log.ASSERT);
         }
-        
+
         promise.resolve(null);
     }
 
@@ -137,7 +153,7 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
             response.putInt("listenerPort", listener.getListenPort());
             response.putString("listenerHost", "localhost");
             response.putString("listenerUrl", String.format("http://localhost:%d/", listener.getListenPort()));
-            if(credentials != null) {
+            if (credentials != null) {
                 response.putString("listenerUrlWithAuth", String.format("http://%s:%s@localhost:%d/", credentials.getLogin(), credentials.getPassword(), listener.getListenPort()));
                 response.putString("username", credentials.getLogin());
                 response.putString("password", credentials.getPassword());
@@ -205,6 +221,150 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
         }
 
         listener.start();
+    }
+
+    @ReactMethod
+    public void startContinuousReplication(String databaseName, String url, ReadableMap options, Promise promise) {
+        try {
+            Database database = manager.getDatabase(databaseName);
+
+            URL remoteUrl = new URL(url);
+
+            boolean isPull = isPull(options.getString("type"));
+
+            for (Replication replication : database.getAllReplications()) {
+                if (replication.isContinuous()&& replication.getRemoteUrl().equals(remoteUrl)) {
+                    if (replication.isPull() && isPull) {
+                        Log.i(TAG, "replication already exists");
+                        promise.resolve(null);
+                        return;
+                    } else if (!replication.isPull() && !isPull) {
+                        Log.i(TAG, "replication already exists");
+                        promise.resolve(null);
+                        return;
+                    }
+                }
+            }
+
+            Replication repl = isPull ? database.createPullReplication(remoteUrl) : database.createPushReplication(remoteUrl);
+
+            String sessionId = options.getString("sessionId");
+
+            String cookieName = "SyncGatewaySession";
+            if (options.hasKey("cookieName"))
+                cookieName = options.getString("cookieName");
+
+            boolean secure = false;
+            if (options.hasKey("secure"))
+                secure = options.getBoolean("secure");
+
+            repl.setContinuous(true);
+            repl.setCookie(cookieName, sessionId, null, null, secure, true);
+
+            repl.addChangeListener(this);
+
+            repl.start();
+
+            promise.resolve(null);
+        } catch (Exception e) {
+            promise.reject("cbl error", "Failed to startContinuousReplication", e);
+        }
+    }
+
+    @ReactMethod
+    public void stopContinuousReplication(String databaseName, String pushOrPull, Promise promise) {
+        try {
+            Database database = manager.getDatabase(databaseName);
+
+            boolean isPull = isPull(pushOrPull);
+
+            for (Replication replication : database.getAllReplications()) {
+                if (replication.isContinuous()) {
+                    if (replication.isPull() && isPull) {
+                        Log.i(TAG, "stopping replication");
+                        replication.stop();
+                        replication.removeChangeListener(this);
+                    } else if (!replication.isPull() && !isPull) {
+                        Log.i(TAG, "stopping replication");
+                        replication.stop();
+                        replication.removeChangeListener(this);
+                    }
+                }
+            }
+
+            promise.resolve(null);
+        } catch (Exception e) {
+            promise.reject("cbl error", "Failed to stopContinuousReplication", e);
+        }
+    }
+
+    @ReactMethod
+    public void suspendContinuousReplications(String databaseName, String pushOrPull, Promise promise) {
+        try {
+            Database database = manager.getDatabase(databaseName);
+
+            boolean isPull = isPull(pushOrPull);
+
+            for (Replication replication : findContinuousReplications(database, isPull)) {
+                Log.i(TAG, "suspending replication");
+                replication.goOffline();
+            }
+
+            promise.resolve(null);
+        } catch (Exception e) {
+            promise.reject("cbl error", "Failed to stopContinuousReplication", e);
+        }
+    }
+
+    @ReactMethod
+    public void resumeContinuousReplications(String databaseName, String pushOrPull, Promise promise) {
+        try {
+            Database database = manager.getDatabase(databaseName);
+
+            boolean isPull = isPull(pushOrPull);
+
+            for (Replication replication : findContinuousReplications(database, isPull)) {
+                Log.i(TAG, "suspending replication");
+                replication.goOnline();
+            }
+
+            promise.resolve(null);
+        } catch (Exception e) {
+            promise.reject("cbl error", "Failed to stopContinuousReplication", e);
+        }
+    }
+
+    @Override
+    public void changed(Replication.ChangeEvent event) {
+        WritableMap nativeEvent = Arguments.createMap();
+
+        Replication source = event.getSource();
+        nativeEvent.putString("type", source.isPull() ? "pull" : "push");
+        nativeEvent.putInt("changesCount", event.getChangeCount());
+        nativeEvent.putInt("completedChangesCount", event.getCompletedChangeCount());
+        nativeEvent.putBoolean("running", source.isRunning());
+        nativeEvent.putString("status", event.getStatus().name());
+        nativeEvent.putBoolean("suspended", source.isRunning());
+        nativeEvent.putString("lastErrorCode", event.getError() == null ? "" : event.getError().getMessage());
+
+        context.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                .emit("replicationChanged", nativeEvent);
+    }
+
+    @ReactMethod
+    public void copyAttachment(String databaseName, String id, String attachmentName, String path, Promise promise) {
+        try {
+            Database database = manager.getDatabase(databaseName);
+
+            Document doc = database.getDocument(id);
+            Revision rev = doc.getCurrentRevision();
+            Attachment att = rev.getAttachment(attachmentName);
+            if (att != null) {
+                copy(att, path);
+            }
+        } catch (Exception e) {
+            promise.reject("cbl error", "Failed to copy attachment", e);
+        }
     }
 
     @ReactMethod
@@ -348,6 +508,45 @@ public class ReactCBLite extends ReactContextBaseJavaModule {
         public UploadResult(int statusCode, String response) {
             this.statusCode = statusCode;
             this.response = response;
+        }
+    }
+
+    private static Iterable<Replication> findContinuousReplications(Database database, boolean isPull) {
+        List<Replication> matching = new ArrayList<>();
+        for (Replication replication : database.getAllReplications()) {
+            if(!replication.isContinuous())
+                continue;
+
+            if(isPull && replication.isPull())
+                matching.add(replication);
+
+            if(!isPull && !replication.isPull())
+                matching.add(replication);
+        }
+
+        return matching;
+    }
+
+    private static boolean isPull(String pushOrPull) {
+        if (pushOrPull.equals("pull"))
+            return true;
+        else if (pushOrPull.equals("push"))
+            return false;
+        else
+            throw new IllegalStateException("invalid type: " + pushOrPull);
+    }
+
+    private static void copy(Attachment att, String path) throws CouchbaseLiteException, IOException {
+        InputStream in = att.getContent();
+        try {
+            FileOutputStream out = new FileOutputStream(path);
+            try {
+                IOUtils.copy(in, out);
+            } finally {
+                out.close();
+            }
+        } finally {
+            in.close();
         }
     }
 }
