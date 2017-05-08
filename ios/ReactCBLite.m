@@ -7,9 +7,7 @@
 //
 
 #import "ReactCBLite.h"
-
-#import "RCTLog.h"
-
+#import <React/RCTLog.h>
 #import "CouchbaseLite/CouchbaseLite.h"
 #import "CouchbaseLiteListener/CouchbaseLiteListener.h"
 #import "CBLRegisterJSViewCompiler.h"
@@ -284,7 +282,7 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
     
     NSString *status = @"unknown";
     if (repl.status == kCBLReplicationActive) {
-        status = @"in-progrss";
+        status = @"in-progress";
     } else if (repl.status == kCBLReplicationOffline) {
         status = @"offline";
     } else if (repl.status == kCBLReplicationStopped) {
