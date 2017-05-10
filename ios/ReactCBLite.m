@@ -211,8 +211,6 @@ RCT_EXPORT_METHOD(stopContinuousReplication:(NSString*)databaseName pushOrPull:(
             RCTLogTrace(@"rncbl - Stopping replication: %@", repl);
             [[NSNotificationCenter defaultCenter] removeObserver: self];
             [repl stop];
-        } else {
-            RCTLogTrace(@"rncbl - got a continuous replication that doesn't match!?: %@", repl);
         }
     }
     
