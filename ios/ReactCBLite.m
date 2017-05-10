@@ -33,7 +33,7 @@ const int DEFAULT_PORT = 5984;
 RCT_EXPORT_METHOD(init:(NSDictionary*)options :(RCTPromiseResolveBlock)resolve :(RCTPromiseRejectBlock)reject)
 {
     @try {
-        RCTLogInfo(@"rncbl - Launching Couchbase Lite...");
+        RCTLogTrace(@"rncbl - Launching Couchbase Lite...");
         
         // not using [CBLManager sharedInstance] because it doesn't behave well when the app is backgrounded
         NSString *username = [options objectForKey:@"username"];
@@ -103,7 +103,7 @@ RCT_EXPORT_METHOD(init:(NSDictionary*)options :(RCTPromiseResolveBlock)resolve :
     BOOL success = [cblLlistener start: &err];
     
     if (success) {
-        RCTLogInfo(@"rncbl - Couchbase Lite running on %@", cblLlistener.URL);
+        RCTLogTrace(@"rncbl - Couchbase Lite running on %@", cblLlistener.URL);
         return cblLlistener;
     } else {
         RCTLogTrace(@"rncbl - Could not start listener on port %d: %@", port, err);
@@ -153,7 +153,7 @@ RCT_EXPORT_METHOD(startListener :(RCTPromiseResolveBlock)resolve :(RCTPromiseRej
     RCTLogTrace(@"rncbl - Starting Couchbase Lite listener process");
     NSError* error;
     if ([listener start:&error]) {
-        RCTLogInfo(@"rncbl - Couchbase Lite listening at %@", listener.URL);
+        RCTLogTrace(@"rncbl - Couchbase Lite listening at %@", listener.URL);
         resolve(nil);
     } else {
         RCTLogWarn(@"rncbl - Couchbase Lite couldn't start listener at %@: %@", listener.URL, error.localizedDescription);
@@ -163,7 +163,7 @@ RCT_EXPORT_METHOD(startListener :(RCTPromiseResolveBlock)resolve :(RCTPromiseRej
 
 RCT_EXPORT_METHOD(stopListener :(RCTPromiseResolveBlock)resolve :(RCTPromiseRejectBlock)reject)
 {
-    RCTLogInfo(@"rncbl - Stopping Couchbase Lite listener process");
+    RCTLogTrace(@"rncbl - Stopping Couchbase Lite listener process");
     [listener stop];
     resolve(nil);
 }
@@ -173,7 +173,7 @@ RCT_EXPORT_METHOD(resumeContinuousReplications:(NSString*)databaseName :(RCTProm
     
     for(CBLReplication* repl in [database allReplications]) {
         if(repl.continuous && repl.suspended) {
-            RCTLogInfo(@"rncbl - resuming => %@", repl);
+            RCTLogTrace(@"rncbl - resuming => %@", repl);
             repl.suspended = NO;
         }
     }
@@ -186,7 +186,7 @@ RCT_EXPORT_METHOD(suspendContinuousReplications:(NSString*)databaseName :(RCTPro
     
     for(CBLReplication* repl in [database allReplications]) {
         if(repl.continuous && !repl.suspended) {
-            RCTLogInfo(@"rncbl - suspending => %@", repl);
+            RCTLogTrace(@"rncbl - suspending => %@", repl);
             repl.suspended = YES;
         }
     }
@@ -195,18 +195,24 @@ RCT_EXPORT_METHOD(suspendContinuousReplications:(NSString*)databaseName :(RCTPro
 }
 
 RCT_EXPORT_METHOD(stopContinuousReplication:(NSString*)databaseName pushOrPull:(NSString*)type :(RCTPromiseResolveBlock)resolve :(RCTPromiseRejectBlock)reject) {
+    RCTLogTrace(@"rncbl - Stopping continuous %@ replication", type);
     
     CBLDatabase* database = [manager databaseNamed:databaseName error:NULL];
     
     for(CBLReplication* repl in [database allReplications]) {
-        if(repl.continuous && !repl.pull && [type isEqualToString:@"push"]) {
-            RCTLogInfo(@"rncbl - Stopping %@ replication: %@", type, repl);
-            [repl stop];
-        }
+        if(!repl.continuous)
+            continue;
         
-        if(repl.continuous && repl.pull && [type isEqualToString:@"pull"]) {
-            RCTLogInfo(@"rncbl - Stopping %@ replication: %@", type, repl);
+        if(!repl.pull && [type isEqualToString:@"push"]) {
+            RCTLogTrace(@"rncbl - Stopping replication: %@", repl);
+            [[NSNotificationCenter defaultCenter] removeObserver: self];
             [repl stop];
+        } else if(repl.pull && [type isEqualToString:@"pull"]) {
+            RCTLogTrace(@"rncbl - Stopping replication: %@", repl);
+            [[NSNotificationCenter defaultCenter] removeObserver: self];
+            [repl stop];
+        } else {
+            RCTLogTrace(@"rncbl - got a continuous replication that doesn't match!?: %@", repl);
         }
     }
     
@@ -270,8 +276,7 @@ RCT_EXPORT_METHOD(startContinuousReplication:(NSString*)databaseName :(NSString*
     
     [repl start];
     
-    NSString *message = [NSString stringWithFormat:@"%@ continuous replication started", type];
-    RCTLogInfo(@"rncbl - %@", message);
+    RCTLogTrace(@"rncbl - continuous %@ replication started", type);
     
     resolve(nil);
 }
@@ -336,7 +341,7 @@ RCT_EXPORT_METHOD(upload:(NSString *)method
 {
     
     if([sourceUri hasPrefix:@"assets-library"]){
-        RCTLogInfo(@"rncbl - Uploading attachment from asset %@ to %@", sourceUri, targetUri);
+        RCTLogTrace(@"rncbl - Uploading attachment from asset %@ to %@", sourceUri, targetUri);
         
         // thanks to
         // * https://github.com/kamilkp/react-native-file-transfer/blob/master/RCTFileTransfer.m
@@ -357,11 +362,11 @@ RCT_EXPORT_METHOD(upload:(NSString *)method
             return reject(@"cbl error", error.description, error);
         }];
     } else if ([sourceUri isAbsolutePath]) {
-        RCTLogInfo(@"rncbl - Uploading attachment from file %@ to %@", sourceUri, targetUri);
+        RCTLogTrace(@"rncbl - Uploading attachment from file %@ to %@", sourceUri, targetUri);
         NSData *data = [NSData dataWithContentsOfFile:sourceUri];
         [self sendData:method authHeader:authHeader data:data targetUri:targetUri contentType:contentType resolve:resolve reject:reject];
     } else {
-        RCTLogInfo(@"rncbl - Uploading attachment from uri %@ to %@", sourceUri, targetUri);
+        RCTLogTrace(@"rncbl - Uploading attachment from uri %@ to %@", sourceUri, targetUri);
         NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:sourceUri]];
         [self sendData:method authHeader:authHeader data:data targetUri:targetUri contentType:contentType resolve:resolve reject:reject];
     }
